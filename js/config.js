@@ -1,4 +1,4 @@
-// config.js — Cấu hình OAuth. DÁN Client ID của anh vào đây (xem README, mục 1).
+// config.js — Cấu hình OAuth (Google Cloud project HDDuytu, client "HD Duy tu - GitHub Pages").
 export const CONFIG = {
-  clientId: 'DAN-CLIENT-ID-VAO-DAY',
+  clientId: '828959480448-334tfhrdgpfh3l015akro3thguvsmcgv.apps.googleusercontent.com',
 };

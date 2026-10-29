@@ -25,7 +25,13 @@ const uid = (p) => `${p}-${Date.now().toString(36)}${(seq++).toString(36)}${Math
 
 /** Chi tiết HM từ mẫu: KL vị trí × hệ số. */
 export function apMau(mau, kl) {
-  return (mau || []).filter((m) => m.ma).map((m) => ({ ma: m.ma, kl: round((+kl || 0) * (+m.heSo || 0)) }));
+  return gopMa((mau || []).filter((m) => m.ma).map((m) => ({ ma: m.ma, kl: round((+kl || 0) * (+m.heSo || 0)) })));
+}
+/** Gộp các dòng trùng mã HM trong 1 vị trí (cộng KL) — mỗi mã chỉ 1 dòng để KH/TH luôn nhất quán. */
+export function gopMa(list) {
+  const m = new Map();
+  for (const c of list || []) { const ma = String(c.ma || '').trim().toUpperCase(); if (!ma) continue; m.set(ma, round((m.get(ma) || 0) + (+c.kl || 0))); }
+  return [...m].map(([ma, kl]) => ({ ma, kl }));
 }
 const round = (x) => Math.round(x * 1e6) / 1e6;
 
@@ -81,7 +87,7 @@ export function apMauChoLoai(st, loai, ghiDe = false) {
 export function suaChiTiet(st, id, chiTiet) {
   const v = st.viTri.find((x) => x.id === id);
   if (!v) return false;
-  v.chiTiet = chiTiet.filter((c) => c.ma).map((c) => ({ ma: String(c.ma).trim().toUpperCase(), kl: +c.kl || 0 }));
+  v.chiTiet = gopMa(chiTiet);
   v.chiTietSua = true;
   return true;
 }
@@ -160,7 +166,11 @@ export function khopThucHien(st, r, thang, { apply = true } = {}) {
   const used = new Set();
   const khop = [], khongKhop = [];
   for (const row of r.viTri) {
-    const cand = (pool.get(keyVT(row)) || []).find((v) => !used.has(v.id));
+    const ds = (pool.get(keyVT(row)) || []).filter((v) => !used.has(v.id));
+    // Ưu tiên vị trí chưa đánh dấu thực hiện, rồi năm KH mới nhất — tránh ghi đè vị trí đã nghiệm thu đợt trước
+    const namPL = (v) => +(st.phuLuc.find((p) => p.id === v.plId)?.namKH || 0);
+    ds.sort((a, b) => (a.trangThai === 'da') - (b.trangThai === 'da') || namPL(b) - namPL(a));
+    const cand = ds[0];
     if (!cand) { khongKhop.push(row); continue; }
     used.add(cand.id);
     khop.push({ id: cand.id, tram: cand.tram, kl: row.kl, klKH: cand.kl });

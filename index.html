@@ -15,7 +15,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="./app.css">
-<script>try{var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t;}catch(e){}</script>
+<script>try{var t=localStorage.getItem("theme");if(t){document.documentElement.dataset.theme=t;document.querySelector('meta[name=theme-color]').setAttribute("content",t==="light"?"#ffffff":"#0a0f16");}}catch(e){}</script>
 <title>Quản lý Hợp đồng Duy tu — CSKVTT</title>
 </head>
 <body>

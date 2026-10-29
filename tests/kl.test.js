@@ -195,6 +195,28 @@ if (FIX && fs.existsSync(FIX)) {
   }
 } else { skip++; console.log('… bỏ qua test file phụ lục thật (chưa đặt KL_FIX)'); }
 
+// ---- Sửa sau review độc lập ----
+{
+  eq(K.gopMa([{ ma: 'hm121', kl: 1 }, { ma: 'HM121 ', kl: 2 }, { ma: 'HM021', kl: 1 }, { ma: '', kl: 5 }]), [{ ma: 'HM121', kl: 3 }, { ma: 'HM021', kl: 1 }], 'gopMa: gộp mã trùng, bỏ mã trống');
+  const st = K.emptyState();
+  st.phuLuc.push({ id: 'a', loai: 'PLI', namKH: 2025 }, { id: 'b', loai: 'PLI', namKH: 2026 });
+  st.viTri.push({ id: 'v1', plId: 'a', tram: 'T1', phuong: 'P', tuyen: 'D', kl: 1, trangThai: 'da', thangNT: '2025-05', chiTiet: [] },
+    { id: 'v2', plId: 'b', tram: 'T1', phuong: 'P', tuyen: 'D', kl: 1, trangThai: 'chua', chiTiet: [] });
+  const r = K.khopThucHien(st, { loai: 'PLI', viTri: [{ tram: 'T1', phuong: 'P', tuyen: 'D', kl: 1 }] }, '2026-10');
+  eq([r.khop[0].id, st.viTri[0].thangNT, st.viTri[1].trangThai], ['v2', '2025-05', 'da'], 'khopThucHien: ưu tiên vị trí chưa thực hiện, không ghi đè tháng NT cũ');
+  const { tieuChi } = await import('../js/kl/export.js');
+  eq(tieuChi('A*"B'), '"=A~*""B"', 'tieuChi: thoát ký tự đại diện và nháy kép');
+  if (ExcelJS) {
+    const s2 = K.emptyState();
+    s2.phuLuc.push({ id: 'p1', loai: 'PLIII', sheet: 'TongHop', namKH: 2026, nhom: [] }, { id: 'p2', loai: 'PLIII', sheet: 'X', namKH: 2026, nhom: [] });
+    s2.viTri.push({ id: 'a1', plId: 'p1', nhom: 'P1', tram: 'A', kl: 2, goi: 'G2', chiTiet: [{ ma: 'HM1', kl: 2 }], trangThai: 'chua' },
+      { id: 'a2', plId: 'p2', nhom: 'P1', tram: 'B', kl: 3, goi: 'G2', chiTiet: [{ ma: 'HM1', kl: 3 }], trangThai: 'chua' });
+    const wb = buildWorkbook(ExcelJS, s2, { templates: PL_TEMPLATES, phuLucIds: ['p1'] });
+    eq(wb.getWorksheet('ChiTiet_HM').rowCount, 2, 'xuất: ChiTiet_HM chỉ gồm phụ lục được chọn');
+    ok(wb.getWorksheet('TongHop_2') && wb.getWorksheet('TongHop'), 'xuất: sheet phụ lục tên "TongHop" không đụng sheet tổng hợp');
+  }
+}
+
 const HMF = process.env.KL_HM;
 if (HMF && fs.existsSync(HMF)) {
   const wb = XLSX.read(fs.readFileSync(HMF), { type: 'buffer', sheets: ['Tong hop HM', 'G1_11C', 'G2_11C', 'G3_11C', 'G4_11C'] });

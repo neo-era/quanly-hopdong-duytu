@@ -244,6 +244,7 @@ function renderTools() {
 export function render() {
   renderHeader(); renderNav();
   app().classList.toggle('wide', route.name === 'klvt');
+  if (route.name !== 'klvt') { const v = app(); v.onclick = v.onchange = v.oninput = v.onkeydown = null; }
   if (route.name === 'dashboard') renderDashboard();
   else if (route.name === 'contracts') renderContracts();
   else if (route.name === 'detail') renderDetail(route.id);
@@ -404,7 +405,7 @@ export function bindEvents() {
 
   document.body.addEventListener('change', async (e) => {
     if (e.target.id === 'impJson') {
-      try { const obj = await X.nhapJSON(e.target.files[0]); await S.mutate(d => { d.contracts = obj.contracts; }); toast('Đã nạp dữ liệu từ JSON.', 'ok'); go('dashboard'); }
+      try { const obj = await X.nhapJSON(e.target.files[0]); await S.mutate(d => { d.contracts = obj.contracts; if (obj.klvt) d.klvt = obj.klvt; }); toast('Đã nạp dữ liệu từ JSON.', 'ok'); go('dashboard'); }
       catch (err) { toast(err.message, 'err'); }
       e.target.value = '';
     }

@@ -9,11 +9,15 @@ const SHEET_TEN = { PLI: 'PLI_ThaySuaTu', PLII: 'PLII_LED', PLIII: 'PLIII_Tru', 
 const rowOf = (a) => +a.replace(/^[A-Z]+/, '');
 const colOf = (a) => a.replace(/\d+$/, '');
 
+const RESERVED = new Set(['tonghop', 'chitiet_hm', 'doichieu_hm']);
 function uniqueName(wb, base) {
-  let n = base.replace(/[\\/?*[\]:]/g, '').slice(0, 31) || 'Sheet', i = 2;
-  while (wb.getWorksheet(n)) n = `${base.slice(0, 28)}_${i++}`;
+  const b = base.replace(/[\\/?*[\]:']/g, '').slice(0, 31) || 'Sheet';
+  let n = b, i = 2;
+  while (wb.getWorksheet(n) || RESERVED.has(n.toLowerCase())) n = `${b.slice(0, 28)}_${i++}`;
   return n;
 }
+/** Tiêu chí SUMIFS khớp đúng nguyên văn (thoát ~ * ? và dấu nháy kép, tránh bị hiểu là toán tử). */
+export const tieuChi = (t) => '"=' + String(t).replace(/[~*?]/g, (c) => '~' + c).replace(/"/g, '""') + '"';
 
 /**
  * opts: { templates, phuLucIds: [...], doiChieu: [{goi, nam}] (mặc định: mọi cặp có trong dữ liệu) }
@@ -27,7 +31,8 @@ export function buildWorkbook(ExcelJS, st, opts) {
   const outSheets = [];
   for (const pl of pls) outSheets.push(writePL(wb, st, pl, T[pl.loai]));
   writeTongHop(wb, outSheets);
-  writeDoiChieu(wb, st, opts.doiChieu);
+  const ids = new Set(pls.map((p) => p.id));
+  writeDoiChieu(wb, { ...st, phuLuc: pls, viTri: st.viTri.filter((v) => ids.has(v.plId)) }, opts.doiChieu);
   // Đưa TongHop lên đầu như file gốc
   const th = wb.getWorksheet('TongHop'); if (th) th.orderNo = -1;
   return wb;
@@ -167,7 +172,7 @@ function writeTongHop(wb, outs) {
         const khac = kids.slice(0, -1);
         ws.getCell('C' + rr).value = { formula: `${sn}!${KL}${first - 1}${khac.length ? `-SUM(C${khac[0]}:C${khac[khac.length - 1]})` : ''}`, result: sum };
       } else {
-        const crit = [`${rng(tpl.extra.goi)},"${goi || '='}"`, `${rng(tpl.extra.donVi)},"${dv || '='}"`];
+        const crit = [`${rng(tpl.extra.goi)},${goi ? tieuChi(goi) : '"="'}`, `${rng(tpl.extra.donVi)},${dv ? tieuChi(dv) : '"="'}`];
         ws.getCell('C' + rr).value = { formula: `SUMIFS(${rng(KL)},${crit.join(',')})`, result: sum };
       }
       ws.getCell('D' + rr).value = tpl.dvt;

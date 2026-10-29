@@ -8,12 +8,15 @@ const fmt = (n, d = 2) => (n === null || n === undefined || n === '' ? '—' : (
 const tien = (n) => { const a = Math.abs(n || 0); return a >= 1e9 ? fmt(n / 1e9, 2) + ' tỷ' : a >= 1e6 ? fmt(n / 1e6, 1) + ' tr' : fmt(n, 0); };
 const goiTen = (g) => (g ? 'Gói ' + g.replace(/^G/, '') : '—');
 const thangNay = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
-const thangTen = (t) => (t ? t.replace(/^(\d{4})-(\d{2})$/, 'T$2/$1') : '');
+const thangTen = (t) => (t ? esc(String(t).replace(/^(\d{4})-(\d{2})$/, 'T$2/$1')) : '');
 const PAGE = 400;
 
 let api = null;
+/** Danh sách gói: G1–G4 + mọi gói có trong bảng giá HĐ và dữ liệu (không mất gói 5, 6…). */
+const goiList = (S, extra) => [...new Set(['G1', 'G2', 'G3', 'G4', ...Object.values(S.catalog).flatMap((it) => Object.keys(it.goi || {})), ...S.viTri.map((v) => v.goi), extra].filter(Boolean))]
+  .sort((a, b) => (+a.slice(1) || 0) - (+b.slice(1) || 0));
 const ui = { tab: 'vitri', f: { loai: '', plId: '', goi: '', donVi: '', trangThai: '', q: '' }, sel: new Set(), limit: PAGE,
-  dc: { goi: '', nam: 0, ma: '', open: new Set(), tatCa: false }, mauLoai: 'PLI', focus: '' };
+  dc: { goi: '', nam: 0, ma: '', open: new Set(), touched: false, tatCa: false }, mauLoai: 'PLI', focus: '' };
 
 const st = () => { const d = api.getData(); if (!d.klvt) d.klvt = K.emptyState(); return d.klvt; };
 const isLandPhone = () => matchMedia('(orientation: landscape) and (max-height: 520px)').matches;
@@ -49,6 +52,11 @@ export function renderKL(root, a) {
   else if (ui.tab === 'mau') renderMau(v);
   else renderPhuLuc(v);
   root.onclick = onClick; root.onchange = onChange; root.oninput = onInput;
+  root.onkeydown = (e) => { // Enter / Space trên dòng hoặc thẻ vị trí = mở chi tiết
+    const t = e.target.closest?.('[data-vt]');
+    if (!t || e.target !== t || (e.key !== 'Enter' && e.key !== ' ')) return;
+    e.preventDefault(); if (isLandPhone()) { ui.focus = t.dataset.vt; rerender(); } else openViTri(t.dataset.vt);
+  };
 }
 const rerender = () => (api.render ? api.render() : renderKL(document.getElementById('view'), api));
 
@@ -94,11 +102,11 @@ function renderViTri(el) {
     cards += `<div class="kl-ph"><span>${esc(items[0].nhom || '(chưa rõ phường)')}</span><span class="n">${fmt(sum)} ${esc(PL_TEMPLATES[pl?.loai]?.dvt || '')}</span></div>`;
     for (const v of items) {
       const on = ui.sel.has(v.id);
-      rows += `<tr class="${on ? 'sel' : ''}" data-vt="${v.id}"><td><input type="checkbox" class="kl-cb" data-sel="${v.id}" ${on ? 'checked' : ''} aria-label="Chọn"></td>
+      rows += `<tr class="${on ? 'sel' : ''}" data-vt="${v.id}" tabindex="0" aria-label="${esc(v.tram)} — Enter để mở chi tiết"><td><input type="checkbox" class="kl-cb" data-sel="${v.id}" ${on ? 'checked' : ''} aria-label="Chọn"></td>
         <td class="n">${esc(v.stt)}</td><td><b>${esc(v.tram)}</b>${v.boSungTu ? '' : ''}</td><td>${esc(v.phuong)}</td><td>${esc(v.tuyen)}${v.lyTrinhDau ? `<div class="kl-sub">${esc(v.lyTrinhDau)} → ${esc(v.lyTrinhCuoi)}</div>` : ''}</td>
         <td class="r n">${fmt(v.kl)}</td><td>${esc(goiTen(v.goi))}<div class="kl-sub">${esc(v.donVi)}</div></td><td>${chips(v)}</td><td>${stt(v)}</td></tr>`;
-      cards += `<div class="kl-card ${on ? 'sel' : ''} ${ui.focus === v.id ? 'focus' : ''}" data-vt="${v.id}">
-        <div class="h"><label><input type="checkbox" class="kl-cb" data-sel="${v.id}" ${on ? 'checked' : ''} aria-label="Chọn"> ${esc(v.tram)}</label><span class="n">${fmt(v.kl)} ${esc(PL_TEMPLATES[pl?.loai]?.dvt || '')}</span></div>
+      cards += `<div class="kl-card ${on ? 'sel' : ''} ${ui.focus === v.id ? 'focus' : ''}" data-vt="${v.id}" tabindex="0" role="button" aria-label="${esc(v.tram)} — mở chi tiết">
+        <div class="h"><span class="kl-cn"><input type="checkbox" class="kl-cb" data-sel="${v.id}" ${on ? 'checked' : ''} aria-label="Chọn ${esc(v.tram)}"> ${esc(v.tram)}</span><span class="n">${fmt(v.kl)} ${esc(PL_TEMPLATES[pl?.loai]?.dvt || '')}</span></div>
         <div class="s">${esc(v.tuyen)} · ${esc(goiTen(v.goi))}${v.donVi ? ' · ' + esc(v.donVi) : ''}${v.namLD ? ' · lắp ' + esc(v.namLD) : ''}</div>${chips(v)}<div class="st">${stt(v)}</div></div>`;
     }
   }
@@ -118,6 +126,8 @@ function renderViTri(el) {
         <input class="kl-search" type="search" placeholder="Tìm trạm đèn, tuyến, phường…" value="${esc(ui.f.q)}" data-q aria-label="Tìm">
         <select class="kl-sel-m" data-fsel="plId" aria-label="Phụ lục"><option value="">Mọi phụ lục</option>${S.phuLuc.map((p) => `<option value="${p.id}" ${ui.f.plId === p.id ? 'selected' : ''}>${esc(K.LOAI_TEN[p.loai])}${p.dot ? ' · ' + esc(p.dot) : ''}</option>`).join('')}</select>
         <select class="kl-sel-m" data-fsel="goi" aria-label="Gói"><option value="">Mọi gói</option>${[...by('goi').keys()].sort().map((g) => `<option value="${g}" ${ui.f.goi === g ? 'selected' : ''}>${goiTen(g)}</option>`).join('')}</select>
+        <select class="kl-sel-m" data-fsel="trangThai" aria-label="Trạng thái">${[['', 'Mọi trạng thái'], ['chua', 'Chưa làm'], ['dang', 'Đang làm'], ['da', 'Đã thực hiện'], ['chuaGan', 'Chưa gắn HM']].map(([k, t]) => `<option value="${k}" ${ui.f.trangThai === k ? 'selected' : ''}>${t}</option>`).join('')}</select>
+        <select class="kl-sel-m" data-fsel="donVi" aria-label="Đơn vị"><option value="">Mọi đơn vị</option>${[...by('donVi').keys()].sort().map((d) => `<option value="${esc(d)}" ${ui.f.donVi === d ? 'selected' : ''}>${esc(d)}</option>`).join('')}</select>
         <span class="kl-count">${fmt(list.length, 0)} vị trí · ${fmt(tongKL)}</span>
       </div>
       <div class="kl-split">
@@ -166,6 +176,8 @@ function dcOptions() {
 function renderDoiChieu(el) {
   const S = st();
   const { goi, nam } = dcOptions();
+  const khongGoi = S.viTri.filter((v) => !v.goi).length;
+  if (!goi.length) { el.innerHTML = `<div class="kl-empty"><h3>Chưa có vị trí nào được gán gói</h3><p>${fmt(khongGoi, 0)} vị trí chưa có gói nên chưa đối chiếu được với KL hợp đồng. Mở từng vị trí (hoặc nhập lại phụ lục, chọn "gán gói") để gán gói.</p></div>`; return; }
   const d = K.doiChieu(S, ui.dc.goi, ui.dc.nam);
   let rows = d.rows;
   if (ui.dc.tatCa) {
@@ -199,7 +211,7 @@ function renderDoiChieu(el) {
       <div class="k"><span>Vượt KL HĐ</span><b class="n" style="color:var(--red)">${fmt(d.soVuot, 0)}</b></div>
       <div class="k"><span>Vị trí đã thực hiện</span><b class="n">${fmt(d.soVTDaTH, 0)}<small> / ${fmt(d.soVT, 0)}</small></b></div>
       <div class="k"><span>Giá trị KH theo đơn giá HĐ</span><b class="n">${tien(d.tienKH)}</b></div>
-      <div class="k"><span>Chưa gắn HM</span><b class="n" style="color:${d.chuaGanHM ? 'var(--org)' : 'inherit'}">${fmt(d.chuaGanHM, 0)} vị trí</b></div>
+      <div class="k"><span>Chưa gắn HM${khongGoi ? ' · chưa có gói' : ''}</span><b class="n" style="color:${d.chuaGanHM || khongGoi ? 'var(--org)' : 'inherit'}">${fmt(d.chuaGanHM, 0)}${khongGoi ? ` · ${fmt(khongGoi, 0)}` : ''} vị trí</b></div>
     </div>
     <div class="kl-dcbody">
       <div class="kl-hmlist">${rows.map(card).join('') || '<div class="empty">Chưa có vị trí nào gắn mã HM cho gói/năm này. Vào tab "Mẫu chi tiết HM" để khai mẫu, rồi "Gắn mẫu HM".</div>'}</div>
@@ -218,7 +230,7 @@ function detHTML(S, r) {
   return `<div class="kl-dh"><b>${esc(r.ma)}</b><span>${esc(r.ten)}</span>${r.vuot ? `<span class="pill red mini">Vượt HĐ ${fmt(r.kh - r.hd)} ${esc(r.dvt)}</span>` : ''}
     <span class="kl-sub" style="margin-left:auto">${fmt(vts.length, 0)} vị trí · ${fmt(byNhom.size, 0)} phường · đơn giá HĐ ${fmt(r.dg, 0)} đ</span></div>
     ${[...byNhom].map(([nhom, items], i) => {
-      const open = ui.dc.open.has(nhom) || (ui.dc.open.size === 0 && i === 0);
+      const open = ui.dc.open.has(nhom) || (!ui.dc.touched && i === 0);
       return `<div class="kl-acc"><button class="ah" data-acc="${esc(nhom)}" aria-expanded="${open}"><span>${open ? '▾' : '▸'} ${esc(nhom || '(chưa rõ phường)')}</span><span class="n">${fmt(items.length, 0)} vị trí · ${fmt(items.reduce((a, v) => a + klOf(v), 0))}</span></button>
       ${open ? items.map((v) => `<div class="ar ${ui.sel.has(v.id) ? 'sel' : ''}"><input type="checkbox" class="kl-cb" data-sel="${v.id}" ${ui.sel.has(v.id) ? 'checked' : ''} aria-label="Chọn">
         <button class="lnk" data-open="${v.id}"><b>${esc(v.tram)}</b></button><span class="kl-sub">${esc(v.tuyen)}</span>
@@ -279,23 +291,27 @@ async function onClick(e) {
   if (t.matches('input.kl-cb')) {
     if (t.dataset.sel) { t.checked ? ui.sel.add(t.dataset.sel) : ui.sel.delete(t.dataset.sel); }
     else if (t.dataset.selall !== undefined) { const l = K.locViTri(S, ui.f); t.checked ? l.forEach((v) => ui.sel.add(v.id)) : l.forEach((v) => ui.sel.delete(v.id)); }
-    else if (t.dataset.selg) { const [pl, nhom] = t.dataset.selg.split('§'); S.viTri.filter((v) => v.plId === pl && v.nhom === nhom).forEach((v) => (t.checked ? ui.sel.add(v.id) : ui.sel.delete(v.id))); }
+    else if (t.dataset.selg) { const [pl, nhom] = t.dataset.selg.split('§'); K.locViTri(S, ui.f).filter((v) => v.plId === pl && v.nhom === nhom).forEach((v) => (t.checked ? ui.sel.add(v.id) : ui.sel.delete(v.id))); }
     return rerender();
   }
-  if (t.dataset.vt && !e.target.closest('input')) {
+  if (t.dataset.vt && !e.target.closest('input, label')) {
     if (isLandPhone()) { ui.focus = t.dataset.vt; return rerender(); }
     return openViTri(t.dataset.vt);
   }
   if (t.dataset.open) return openViTri(t.dataset.open);
-  if (t.dataset.ma) { ui.dc.ma = t.dataset.ma; ui.dc.open = new Set(); return rerender(); }
-  if (t.dataset.acc !== undefined) { const k = t.dataset.acc; const set = ui.dc.open.size ? ui.dc.open : new Set([t.closest('.kl-det').querySelector('[data-acc]').dataset.acc]); set.has(k) ? set.delete(k) : set.add(k); ui.dc.open = set; return rerender(); }
+  if (t.dataset.ma) { ui.dc.ma = t.dataset.ma; ui.dc.open = new Set(); ui.dc.touched = false; return rerender(); }
+  if (t.dataset.acc !== undefined) {
+    const k = t.dataset.acc;
+    if (!ui.dc.touched) { ui.dc.touched = true; const first = t.closest('.kl-det, .sheet-b')?.querySelector('[data-acc]')?.dataset.acc; ui.dc.open = new Set(first !== undefined ? [first] : []); }
+    ui.dc.open.has(k) ? ui.dc.open.delete(k) : ui.dc.open.add(k); return rerender();
+  }
   if (t.dataset.mau) { ui.mauLoai = t.dataset.mau; return rerender(); }
   if (t.dataset.mdel !== undefined) { await api.mutate(() => S.mau[ui.mauLoai].splice(+t.dataset.mdel, 1)); return rerender(); }
   if (t.dataset.plxem) { ui.tab = 'vitri'; ui.f = { ...ui.f, plId: t.dataset.plxem }; return rerender(); }
   if (t.dataset.pldel) {
     const p = S.phuLuc.find((x) => x.id === t.dataset.pldel);
     const ok = await confirmBox(`Xoá ${K.LOAI_TEN[p.loai]} (${p.sheet}) cùng ${S.viTri.filter((v) => v.plId === p.id).length} vị trí? Thao tác này chỉ xoá trong app, file Excel gốc không bị ảnh hưởng.`, 'Xoá phụ lục');
-    if (ok) { await api.mutate(() => K.xoaPhuLuc(S, p.id)); api.toast('Đã xoá phụ lục.', 'ok'); rerender(); }
+    if (ok) { await api.mutate(() => K.xoaPhuLuc(S, p.id)); if (ui.f.plId === p.id) ui.f.plId = ''; const con = new Set(S.viTri.map((v) => v.id)); ui.sel = new Set([...ui.sel].filter((id) => con.has(id))); if (ui.focus && !con.has(ui.focus)) ui.focus = ''; api.toast('Đã xoá phụ lục.', 'ok'); rerender(); }
     return;
   }
   switch (t.dataset.kl) {
@@ -315,7 +331,14 @@ async function onClick(e) {
       let n = 0; await api.mutate(() => (n = K.apMauChoLoai(S, ui.mauLoai, ghiDe)));
       api.toast(`Đã gắn mẫu cho ${n} vị trí.`, 'ok'); return rerender();
     }
-    case 'xemVT': { const r = K.doiChieu(S, ui.dc.goi, ui.dc.nam).rows.find((x) => x.ma === ui.dc.ma); if (!r) return; return openModal(`${r.ma} · vị trí cấu thành`, detHTML(S, r), { wide: true }); }
+    case 'xemVT': {
+      const lay = () => K.doiChieu(S, ui.dc.goi, ui.dc.nam).rows.find((x) => x.ma === ui.dc.ma);
+      const r = lay(); if (!r) return;
+      return openModal(`${r.ma} · vị trí cấu thành`, detHTML(S, r), { wide: true, onMount: (el) => {
+        const b = el.querySelector('.sheet-b');
+        b.addEventListener('click', async (ev) => { if (!ev.target.closest('button, input.kl-cb')) return; await onClick(ev); const r2 = lay(); if (b.isConnected && r2) b.innerHTML = detHTML(S, r2); });
+      } });
+    }
   }
 }
 async function onChange(e) {
@@ -323,7 +346,11 @@ async function onChange(e) {
   if (t.dataset.fsel) { ui.f[t.dataset.fsel] = t.value; ui.limit = PAGE; return rerender(); }
   if (t.dataset.dc) { if (t.dataset.dc === 'tatCa') ui.dc.tatCa = t.checked; else ui.dc[t.dataset.dc] = t.dataset.dc === 'nam' ? +t.value : t.value; ui.dc.ma = ''; return rerender(); }
   if (t.dataset.mrow !== undefined) { await api.mutate(() => { const m = S.mau[ui.mauLoai][+t.dataset.mrow]; m[t.dataset.mk] = t.dataset.mk === 'heSo' ? +t.value || 0 : t.value.trim().toUpperCase(); }); return rerender(); }
-  if (t.dataset.pl) { await api.mutate(() => { const p = S.phuLuc.find((x) => x.id === t.dataset.pl); p[t.dataset.pk] = t.dataset.pk === 'namKH' ? +t.value : t.value; }); api.toast('Đã cập nhật phụ lục.', 'ok'); }
+  if (t.dataset.pl) {
+    if (t.dataset.pk === 'namKH' && !(+t.value >= 2000 && +t.value <= 2100)) { api.toast('Năm kế hoạch không hợp lệ.', 'err'); return rerender(); }
+    await api.mutate(() => { const p = S.phuLuc.find((x) => x.id === t.dataset.pl); p[t.dataset.pk] = t.dataset.pk === 'namKH' ? +t.value : t.value.trim(); });
+    api.toast('Đã cập nhật phụ lục.', 'ok'); return rerender();
+  }
 }
 let qTimer = 0;
 function onInput(e) {
@@ -334,41 +361,73 @@ function onInput(e) {
 }
 
 // ============ Hộp thoại chung ============
-function openModal(title, html, { wide = false, onMount } = {}) {
+let modalOnKey = null, modalOnClose = null;
+function openModal(title, html, { wide = false, onMount, dismiss = true, onClose } = {}) {
   const ov = document.getElementById('modal');
+  // Modal cũ bị thay thế → báo cho nó (vd confirmBox trả false), gỡ phím Esc cũ
+  if (modalOnKey) document.removeEventListener('keydown', modalOnKey);
+  const prevClose = modalOnClose; modalOnClose = null; prevClose?.();
+  const back = document.activeElement;
   ov.innerHTML = `<div class="sheet ${wide ? 'wide' : ''}" role="dialog" aria-modal="true" aria-label="${esc(title)}">
-    <div class="sheet-h"><span>${esc(title)}</span><button class="ic" data-x aria-label="Đóng">✕</button></div><div class="sheet-b">${html}</div></div>`;
+    <div class="sheet-h"><span>${esc(title)}</span>${dismiss ? '<button class="ic" data-x aria-label="Đóng">✕</button>' : ''}</div><div class="sheet-b">${html}</div></div>`;
+  const sheet = ov.querySelector('.sheet');
   ov.classList.add('on');
-  const close = () => { ov.classList.remove('on'); ov.innerHTML = ''; document.removeEventListener('keydown', onKey); };
-  const onKey = (e) => { if (e.key === 'Escape') close(); };
+  const close = () => {
+    if (ov.firstElementChild !== sheet) return; // modal này đã bị thay — không đóng nhầm modal khác
+    ov.classList.remove('on'); ov.innerHTML = ''; document.removeEventListener('keydown', onKey);
+    modalOnKey = null; const oc = modalOnClose; modalOnClose = null; oc?.();
+    if (back && back.isConnected) back.focus?.();
+  };
+  const onKey = (e) => {
+    if (e.key === 'Escape' && dismiss) close();
+    if (e.key === 'Tab') { // giữ tiêu điểm trong hộp thoại
+      const f = [...sheet.querySelectorAll('button:not([disabled]), input, select, textarea, [tabindex="0"]')].filter((x) => x.offsetParent !== null);
+      if (!f.length) return;
+      if (e.shiftKey && document.activeElement === f[0]) { e.preventDefault(); f[f.length - 1].focus(); }
+      else if (!e.shiftKey && document.activeElement === f[f.length - 1]) { e.preventDefault(); f[0].focus(); }
+    }
+  };
+  modalOnKey = onKey; modalOnClose = onClose || null;
   document.addEventListener('keydown', onKey);
-  ov.onclick = (e) => { if (e.target === ov || e.target.closest('[data-x]')) close(); };
-  onMount?.(ov.querySelector('.sheet'), close);
+  ov.onclick = (e) => { if (dismiss && (e.target === ov || e.target.closest('[data-x]'))) close(); };
+  onMount?.(sheet, close);
+  setTimeout(() => { if (sheet.isConnected) (sheet.querySelector('.sheet-b input, .sheet-b select, .sheet-b button, [data-x]') || sheet).focus?.(); }, 0);
   return close;
 }
 function confirmBox(msg, yes = 'Đồng ý', no = 'Huỷ') {
   return new Promise((res) => {
+    let done = false; const fin = (v) => { if (!done) { done = true; res(v); } };
     const close = openModal('Xác nhận', `<p style="margin-bottom:14px">${esc(msg)}</p><div class="sheet-f"><button class="btn ghost" data-n>${esc(no)}</button><button class="btn amber" data-y>${esc(yes)}</button></div>`, {
-      onMount: (el) => { el.querySelector('[data-y]').onclick = () => { close(); res(true); }; el.querySelector('[data-n]').onclick = () => { close(); res(false); }; },
+      onClose: () => fin(false),
+      onMount: (el) => { el.querySelector('[data-y]').onclick = () => { fin(true); close(); }; el.querySelector('[data-n]').onclick = () => { fin(false); close(); }; },
     });
   });
 }
 
 // ============ Đọc file qua luồng nền ============
 let worker = null, wid = 0;
-function parseFile(kind, file, onProgress) {
-  if (!worker) worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
-  return new Promise(async (resolve, reject) => {
-    const id = ++wid;
-    const buf = await file.arrayBuffer();
-    const h = (e) => {
-      if (e.data.id !== id) return;
-      if (e.data.progress) onProgress?.(e.data.progress, e.data.text);
-      if (e.data.done) { worker.removeEventListener('message', h); resolve(e.data.result); }
-      if (e.data.error) { worker.removeEventListener('message', h); reject(new Error(e.data.error)); }
-    };
-    worker.addEventListener('message', h);
-    worker.postMessage({ id, kind, name: file.name, buf }, [buf]);
+const pending = new Map();
+function getWorker() {
+  if (worker) return worker;
+  worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
+  worker.onmessage = (e) => {
+    const p = pending.get(e.data.id); if (!p) return;
+    if (e.data.progress) p.onProgress?.(e.data.progress, e.data.text);
+    if (e.data.done) { pending.delete(e.data.id); p.resolve(e.data.result); }
+    if (e.data.error) { pending.delete(e.data.id); p.reject(new Error(e.data.error)); }
+  };
+  const fail = (msg) => { for (const p of pending.values()) p.reject(new Error(msg)); pending.clear(); try { worker.terminate(); } catch {} worker = null; };
+  worker.onerror = (e) => { e.preventDefault?.(); fail('Luồng đọc file bị lỗi (' + (e.message || 'không rõ') + '). Thử lại hoặc dùng Chrome/Edge bản mới.'); };
+  worker.onmessageerror = () => fail('Không nhận được kết quả đọc file.');
+  return worker;
+}
+async function parseFile(kind, file, onProgress) {
+  const buf = await file.arrayBuffer();
+  const w = getWorker();
+  const id = ++wid;
+  return new Promise((resolve, reject) => {
+    pending.set(id, { resolve, reject, onProgress });
+    w.postMessage({ id, kind, name: file.name, buf }, [buf]);
   });
 }
 const pickFile = (accept, multiple = false) => new Promise((res) => {
@@ -377,7 +436,7 @@ const pickFile = (accept, multiple = false) => new Promise((res) => {
 });
 function progressModal(title) {
   let el;
-  const close = openModal(title, `<div class="kl-prog"><div class="bar"><i style="width:3%"></i></div><p class="muted" data-pt>Đang chuẩn bị…</p></div>`, { onMount: (x) => (el = x) });
+  const close = openModal(title, `<div class="kl-prog"><div class="bar"><i style="width:3%"></i></div><p class="muted" data-pt>Đang chuẩn bị…</p></div>`, { onMount: (x) => (el = x), dismiss: false });
   return { set: (p, t) => { el.querySelector('.bar i').style.width = p + '%'; if (t) el.querySelector('[data-pt]').textContent = t; }, close };
 }
 
@@ -464,10 +523,10 @@ async function nhapPhuLuc() {
       ${trung ? `<p class="kl-warn">Phụ lục này đã nhập ngày ${new Date(trung.ngayNhap).toLocaleDateString('vi-VN')}.
         <label><input type="radio" name="m${i}" value="replace" checked> Thay bằng bản mới (giữ trạng thái thực hiện)</label> <label><input type="radio" name="m${i}" value="skip"> Bỏ qua</label></p>` : ''}
       <div class="kl-impf">
-        <label class="fld"><span>Đợt</span><input class="kl-in" data-io="dot" data-i="${i}" value="${esc([...new Set(r.viTri.map((v) => v.dot).filter(Boolean))][0] || '')}" placeholder="vd Đợt 2"></label>
-        <label class="fld"><span>Nhóm vốn</span><input class="kl-in" data-io="nhomVon" data-i="${i}" placeholder="vd BSV (Đợt 2)-Nhóm 5"></label>
-        <label class="fld"><span>Năm kế hoạch</span><input class="kl-in" type="number" data-io="namKH" data-i="${i}" value="${nam}"></label>
-        ${thieuGoi ? `<label class="fld"><span>${fmt(thieuGoi, 0)} vị trí chưa có gói — gán</span><select data-io="goiMacDinh" data-i="${i}"><option value="">Để trống (tự gán sau)</option>${['G1', 'G2', 'G3', 'G4'].map((g) => `<option value="${g}">${goiTen(g)}</option>`).join('')}</select></label>` : ''}
+        <label class="fld"><span>Đợt</span><input class="kl-in" data-io="dot" data-i="${i}" value="${esc(trung ? trung.dot : [...new Set(r.viTri.map((v) => v.dot).filter(Boolean))][0] || '')}" placeholder="vd Đợt 2"></label>
+        <label class="fld"><span>Nhóm vốn</span><input class="kl-in" data-io="nhomVon" data-i="${i}" value="${esc(trung?.nhomVon || '')}" placeholder="vd BSV (Đợt 2)-Nhóm 5"></label>
+        <label class="fld"><span>Năm kế hoạch</span><input class="kl-in" type="number" data-io="namKH" data-i="${i}" value="${trung?.namKH || nam}"></label>
+        ${thieuGoi ? `<label class="fld"><span>${fmt(thieuGoi, 0)} vị trí chưa có gói — gán</span><select data-io="goiMacDinh" data-i="${i}"><option value="">Để trống (tự gán sau)</option>${goiList(S).map((g) => `<option value="${g}">${goiTen(g)}</option>`).join('')}</select></label>` : ''}
       </div></div>`;
   }).join('');
   openModal('Xem trước — nhập phụ lục', html + `<div class="sheet-f"><button class="btn ghost" data-x>Huỷ</button><button class="btn amber" data-ap>Nhập các sheet đã chọn</button></div>`, {
@@ -571,7 +630,7 @@ function openViTri(id) {
     <div class="tablewrap"><table class="kl-tb tight"><thead><tr><th>Mã HM · hạng mục</th><th class="r">KL kế hoạch</th><th class="r">KL thực hiện</th><th></th></tr></thead><tbody data-lines>${lines.map(row).join('')}</tbody></table></div>
     <button class="btn ghost sm" data-ladd style="margin-top:8px">+ Thêm mã HM</button>
     <div class="kl-impf" style="margin-top:12px">
-      <label class="fld"><span>Gói</span><select data-vg><option value="">—</option>${['G1', 'G2', 'G3', 'G4'].map((g) => `<option value="${g}" ${v.goi === g ? 'selected' : ''}>${goiTen(g)}</option>`).join('')}</select></label>
+      <label class="fld"><span>Gói</span><select data-vg><option value="">—</option>${goiList(S, v.goi).map((g) => `<option value="${g}" ${v.goi === g ? 'selected' : ''}>${goiTen(g)}</option>`).join('')}</select></label>
       <label class="fld"><span>Trạng thái</span><select data-vs>${[['chua', 'Chưa làm'], ['dang', 'Đang làm'], ['da', 'Đã thực hiện']].map(([k, t]) => `<option value="${k}" ${v.trangThai === k ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
       <label class="fld"><span>Tháng nghiệm thu</span><input type="month" data-vm value="${esc(v.thangNT || '')}"></label></div>
     <div class="sheet-f"><button class="btn ghost" data-x>Huỷ</button><button class="btn amber" data-ap>Lưu</button></div>`, {
@@ -582,7 +641,11 @@ function openViTri(id) {
       el.querySelector('[data-ladd]').onclick = () => { const cur = read(); cur.push({ ma: '', kl: 1, th: '' }); tb.innerHTML = cur.map(row).join(''); };
       tb.onclick = (e) => { const x = e.target.closest('[data-lx]'); if (!x) return; const cur = read(); cur.splice(+x.dataset.lx, 1); tb.innerHTML = cur.map(row).join(''); };
       el.querySelector('[data-ap]').onclick = async () => {
-        const cur = read().filter((c) => c.ma);
+        const raw = read().filter((c) => c.ma);
+        // Gộp dòng trùng mã: cộng KL kế hoạch và KL thực hiện
+        const gm = new Map();
+        for (const c of raw) { const o = gm.get(c.ma) || { ma: c.ma, kl: 0, th: '' }; o.kl += c.kl; const th = c.th === '' ? c.kl : +c.th || 0; o.thSum = (o.thSum || 0) + th; o.thSet = o.thSet || c.th !== ''; gm.set(c.ma, o); }
+        const cur = [...gm.values()].map((o) => ({ ma: o.ma, kl: o.kl, th: o.thSet ? o.thSum : '' }));
         const trangThai = el.querySelector('[data-vs]').value;
         await api.mutate(() => {
           const sach = (a) => JSON.stringify(a.map((c) => [c.ma, +c.kl || 0]));

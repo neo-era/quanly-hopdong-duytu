@@ -1,10 +1,11 @@
 // sw.js — Service worker: cache app shell cho PWA (mở offline được).
-const CACHE = 'hdduytu-v2';
+const CACHE = 'hdduytu-v3';
 const SHELL = [
   './', './index.html', './app.css',
   './js/app.js', './js/ui.js', './js/store.js', './js/drive.js',
   './js/calc.js', './js/export.js', './js/config.js', './sample/seed.js',
-  './manifest.webmanifest', './vendor/xlsx.full.min.js',
+  './manifest.webmanifest', './vendor/xlsx.full.min.js', './vendor/exceljs.min.js',
+  './js/kl/ui.js', './js/kl/core.js', './js/kl/parse.js', './js/kl/templates.js', './js/kl/export.js', './js/kl/worker.js',
   './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png', './icons/icon-180.png',
 ];
 

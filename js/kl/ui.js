@@ -16,7 +16,7 @@ let api = null;
 const goiList = (S, extra) => [...new Set(['G1', 'G2', 'G3', 'G4', ...Object.values(S.catalog).flatMap((it) => Object.keys(it.goi || {})), ...S.viTri.map((v) => v.goi), extra].filter(Boolean))]
   .sort((a, b) => (+a.slice(1) || 0) - (+b.slice(1) || 0));
 const ui = { tab: 'vitri', f: { loai: '', plId: '', goi: '', donVi: '', trangThai: '', q: '' }, sel: new Set(), limit: PAGE,
-  dc: { goi: '', nam: 0, ma: '', open: new Set(), touched: false, tatCa: false }, mauLoai: 'PLI', focus: '' };
+  dc: { goi: '', nam: 0, ma: '', open: new Set(), touched: false, tatCa: false, phan: 'ld' }, mauLoai: 'PLI', focus: '' };
 
 const st = () => { const d = api.getData(); if (!d.klvt) d.klvt = K.emptyState(); return d.klvt; };
 const isLandPhone = () => matchMedia('(orientation: landscape) and (max-height: 520px)').matches;
@@ -46,7 +46,7 @@ export function renderKL(root, a) {
     <div class="kl-view" id="klView"></div>
   </div>`;
   const v = root.querySelector('#klView');
-  if (!S.phuLuc.length && ui.tab !== 'mau') v.innerHTML = emptyHTML(S);
+  if (!S.phuLuc.length && ui.tab !== 'mau' && ui.tab !== 'phuluc') v.innerHTML = emptyHTML(S);
   else if (ui.tab === 'vitri') renderViTri(v);
   else if (ui.tab === 'doichieu') renderDoiChieu(v);
   else if (ui.tab === 'mau') renderMau(v);
@@ -178,13 +178,17 @@ function renderDoiChieu(el) {
   const { goi, nam } = dcOptions();
   const khongGoi = S.viTri.filter((v) => !v.goi).length;
   if (!goi.length) { el.innerHTML = `<div class="kl-empty"><h3>Chưa có vị trí nào được gán gói</h3><p>${fmt(khongGoi, 0)} vị trí chưa có gói nên chưa đối chiếu được với KL hợp đồng. Mở từng vị trí (hoặc nhập lại phụ lục, chọn "gán gói") để gán gói.</p></div>`; return; }
-  const d = K.doiChieu(S, ui.dc.goi, ui.dc.nam);
+  const bg = S.bangGia?.[ui.dc.goi];
+  if (ui.dc.phan === 'sap' && !bg?.lienDanh) ui.dc.phan = 'ld';
+  const opt = { phan: ui.dc.phan };
+  const d = K.doiChieu(S, ui.dc.goi, ui.dc.nam, opt);
   let rows = d.rows;
   if (ui.dc.tatCa) {
     const have = new Set(rows.map((r) => r.ma));
     for (const [ma, it] of Object.entries(S.catalog)) {
-      const hd = it.goi?.[ui.dc.goi]?.kl?.[ui.dc.nam];
-      if (hd && !have.has(ma)) rows = rows.concat([{ ma, ten: it.ten, dvt: it.dvt, hd, kh: 0, th: 0, khConLai: 0, hdConLai: hd, vuot: false, nVT: 0, dg: it.goi[ui.dc.goi].dg || 0, tienKH: 0 }]);
+      const gg = it.goi?.[ui.dc.goi];
+      const hd = ui.dc.phan === 'sap' ? gg?.klSap?.[ui.dc.nam] ?? gg?.kl?.[ui.dc.nam] : gg?.kl?.[ui.dc.nam];
+      if (hd && !have.has(ma)) rows = rows.concat([{ ma, ten: it.ten, dvt: it.dvt, hd, kh: 0, th: 0, khConLai: 0, hdConLai: hd, vuot: false, nVT: 0, dg: gg.dgNam?.[ui.dc.nam] ?? gg.dg ?? 0, tienKH: 0 }]);
     }
   }
   if (!ui.dc.ma || !rows.find((r) => r.ma === ui.dc.ma)) ui.dc.ma = rows[0]?.ma || '';
@@ -203,8 +207,11 @@ function renderDoiChieu(el) {
     <div class="kl-dcbar">
       <label>Gói <select data-dc="goi">${goi.map((g) => `<option value="${g}" ${g === ui.dc.goi ? 'selected' : ''}>${goiTen(g)}</option>`).join('')}</select></label>
       <label>Năm <select data-dc="nam">${nam.map((n) => `<option ${n === ui.dc.nam ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+      ${bg?.lienDanh ? `<label>Phạm vi <select data-dc="phan"><option value="ld" ${ui.dc.phan === 'ld' ? 'selected' : ''}>Cả liên danh</option><option value="sap" ${ui.dc.phan === 'sap' ? 'selected' : ''}>Phần Sapulico</option></select></label>` : ''}
       <label class="kl-chk"><input type="checkbox" data-dc="tatCa" ${ui.dc.tatCa ? 'checked' : ''}> Hiện cả mã HM chưa đưa vào KH</label>
-      ${noCat ? '<span class="pill org mini">Chưa nhập bảng giá HĐ — cột KL HĐ đang trống</span>' : ''}
+      ${noCat ? '<span class="pill org mini">Chưa nhập bảng giá HĐ — cột KL HĐ đang trống</span>'
+        : bg ? `<span class="pill grn mini" title="${esc(bg.file)} › ${esc(bg.sheet)}">KL HĐ & đơn giá: bảng giá ký HĐ${bg.lienDanh ? ' · liên danh ' + esc(bg.doiTac || '') : ''}</span>`
+        : '<span class="pill org mini">KL HĐ theo Tong hop HM — chưa có bảng giá ký HĐ của gói này</span>'}
     </div>
     <div class="kl-kpis">
       <div class="k"><span>Mã HM có trong KH</span><b class="n">${fmt(d.rows.length, 0)}</b></div>
@@ -222,7 +229,7 @@ function renderDoiChieu(el) {
   </div>`;
 }
 function detHTML(S, r) {
-  const vts = K.viTriCuaHM(S, r.ma, ui.dc.goi, ui.dc.nam);
+  const vts = K.viTriCuaHM(S, r.ma, ui.dc.goi, ui.dc.nam, { phan: ui.dc.phan });
   const byNhom = new Map();
   for (const v of vts) { if (!byNhom.has(v.nhom)) byNhom.set(v.nhom, []); byNhom.get(v.nhom).push(v); }
   const klOf = (v) => (v.chiTiet || []).filter((c) => c.ma === r.ma).reduce((a, c) => a + c.kl, 0);
@@ -263,9 +270,17 @@ function renderMau(el) {
 }
 
 // ============ Tab Phụ lục đã nhập ============
+function bangGiaHTML(S) {
+  const ks = Object.keys(S.bangGia || {}).sort();
+  if (!ks.length) return `<div class="kl-bgnone muted">Chưa nhập bảng giá ký HĐ — KL HĐ đang lấy từ sheet "Tong hop HM"${S.catalogNguon ? ` (${esc(S.catalogNguon.file)})` : ''}. Bấm "⤓ Bảng giá HĐ" và chọn các file biểu giá G1–G4 (có thể chọn nhiều file một lần).</div>`;
+  return `<div class="kl-plgrid">${ks.map((g) => { const b = S.bangGia[g]; const sum = (o) => Object.values(o || {}).reduce((a, x) => a + x, 0);
+    return `<div class="dcard pad kl-pl"><div class="h"><b>${goiTen(g)} — bảng giá ký HĐ</b><span class="kl-sub">${esc(b.sheet)}</span></div>
+      <div class="kl-sub">${esc(b.file)} · nhập ${new Date(b.ngay).toLocaleDateString('vi-VN')}${b.lienDanh ? ' · liên danh ' + esc(b.doiTac || '') : ''}</div>
+      <div class="kl-plnum"><span><b class="n">${fmt(b.rows.length, 0)}</b> dòng</span><span>Giá trị <b class="n">${tien(sum(b.tong))}</b></span>${b.lienDanh ? `<span>Sapulico <b class="n">${tien(sum(b.tongSap))}</b></span>` : ''}</div></div>`; }).join('')}</div>`;
+}
 function renderPhuLuc(el) {
   const S = st();
-  el.innerHTML = `<div class="kl-pad"><div class="kl-plgrid">
+  el.innerHTML = `<div class="kl-pad"><h3 class="kl-h3">Bảng giá ký hợp đồng</h3>${bangGiaHTML(S)}<h3 class="kl-h3">Phụ lục trình Sở đã nhập</h3>${S.phuLuc.length ? '' : '<p class="muted">Chưa có phụ lục nào.</p>'}<div class="kl-plgrid">
     ${S.phuLuc.map((p) => {
       const vts = S.viTri.filter((v) => v.plId === p.id);
       const da = vts.filter((v) => v.trangThai === 'da').length;
@@ -332,7 +347,7 @@ async function onClick(e) {
       api.toast(`Đã gắn mẫu cho ${n} vị trí.`, 'ok'); return rerender();
     }
     case 'xemVT': {
-      const lay = () => K.doiChieu(S, ui.dc.goi, ui.dc.nam).rows.find((x) => x.ma === ui.dc.ma);
+      const lay = () => K.doiChieu(S, ui.dc.goi, ui.dc.nam, { phan: ui.dc.phan }).rows.find((x) => x.ma === ui.dc.ma);
       const r = lay(); if (!r) return;
       return openModal(`${r.ma} · vị trí cấu thành`, detHTML(S, r), { wide: true, onMount: (el) => {
         const b = el.querySelector('.sheet-b');
@@ -344,7 +359,7 @@ async function onClick(e) {
 async function onChange(e) {
   const t = e.target, S = st();
   if (t.dataset.fsel) { ui.f[t.dataset.fsel] = t.value; ui.limit = PAGE; return rerender(); }
-  if (t.dataset.dc) { if (t.dataset.dc === 'tatCa') ui.dc.tatCa = t.checked; else ui.dc[t.dataset.dc] = t.dataset.dc === 'nam' ? +t.value : t.value; ui.dc.ma = ''; return rerender(); }
+  if (t.dataset.dc) { if (t.dataset.dc === 'tatCa') ui.dc.tatCa = t.checked; else ui.dc[t.dataset.dc] = t.dataset.dc === 'nam' ? +t.value : t.value; if (t.dataset.dc !== 'phan' && t.dataset.dc !== 'tatCa') ui.dc.ma = ''; return rerender(); }
   if (t.dataset.mrow !== undefined) { await api.mutate(() => { const m = S.mau[ui.mauLoai][+t.dataset.mrow]; m[t.dataset.mk] = t.dataset.mk === 'heSo' ? +t.value || 0 : t.value.trim().toUpperCase(); }); return rerender(); }
   if (t.dataset.pl) {
     if (t.dataset.pk === 'namKH' && !(+t.value >= 2000 && +t.value <= 2100)) { api.toast('Năm kế hoạch không hợp lệ.', 'err'); return rerender(); }
@@ -442,27 +457,65 @@ function progressModal(title) {
 
 // ---- Nhập bảng giá HĐ ----
 async function nhapBangGia() {
-  const [f] = await pickFile('.xlsx,.xlsb,.xlsm,.xls');
-  if (!f) return;
+  const files = await pickFile('.xlsx,.xlsb,.xlsm,.xls', true);
+  if (!files.length) return;
   const pg = progressModal('Đọc bảng giá HĐ');
-  try {
-    const cat = await parseFile('hm', f, pg.set);
-    pg.close();
-    const S = st();
-    const n = Object.keys(cat.hm).length;
-    const vd = ['HM021', 'HM121', 'HM186'].filter((m) => cat.hm[m]);
-    openModal('Xem trước — bảng giá HĐ', `
-      <p><b>${esc(f.name)}</b>: ${fmt(n, 0)} mã HM · gói ${cat.goi.map(goiTen).join(', ')} · năm ${cat.nam.join(', ')}</p>
-      <table class="kl-tb tight"><thead><tr><th>Mã</th><th>Hạng mục</th>${cat.goi.map((g) => `<th class="r">${goiTen(g)} ${cat.nam[0]}</th>`).join('')}</tr></thead><tbody>
-      ${vd.map((m) => `<tr><td class="n">${m}</td><td>${esc(cat.hm[m].ten)}</td>${cat.goi.map((g) => `<td class="r n">${fmt(cat.hm[m].goi[g]?.kl?.[cat.nam[0]])}</td>`).join('')}</tr>`).join('')}</tbody></table>
-      ${Object.keys(S.catalog).length ? `<p class="muted">Danh mục hiện có ${fmt(Object.keys(S.catalog).length, 0)} mã sẽ được thay bằng danh mục mới.</p>` : ''}
-      <div class="sheet-f"><button class="btn ghost" data-x>Huỷ</button><button class="btn amber" data-ap>Áp dụng</button></div>`, {
-      onMount: (el, close) => { el.querySelector('[data-ap]').onclick = async () => {
-        await api.mutate(() => { S.catalog = cat.hm; S.catalogNam = cat.nam; S.catalogNguon = { file: f.name, ngay: new Date().toISOString() }; });
-        close(); api.toast(`Đã nhập ${fmt(n, 0)} mã HM.`, 'ok'); rerender();
-      }; },
-    });
-  } catch (err) { pg.close(); api.toast('Không đọc được bảng giá HĐ: ' + err.message, 'err'); }
+  const kq = [];
+  for (const [i, f] of files.entries()) {
+    const set = (p, t) => pg.set(Math.round((i * 100 + p) / files.length), `${f.name}: ${t || ''}`);
+    try { kq.push({ f, ...(await parseFile('bg', f, set)) }); }
+    catch (err) {
+      // Không có Bảng giá HĐ chốt → thử đọc như file kế hoạch có sheet "Tong hop HM"
+      try { kq.push({ f, cat: await parseFile('hm', f, set), bg: null, loiBG: err.message }); }
+      catch (e2) { kq.push({ f, loi: err.message }); }
+    }
+  }
+  pg.close();
+  const S = st();
+  const sum = (o) => Object.values(o || {}).reduce((a, x) => a + x, 0);
+  // File ký HĐ không mã HM: ghép với bảng giá của gói (đã có, hoặc đang nhập cùng lượt)
+  const tam = () => { const t = JSON.parse(JSON.stringify({ catalog: S.catalog, bangGia: S.bangGia || {} })); kq.filter((k) => k.bg?.loai === 'bghd').forEach((k) => { if (k.cat) K.gopDanhMuc(t, k.cat); K.apBangGiaKy(t, k.bg); }); return t; };
+  const t0 = tam();
+  for (const k of kq) if (k.bg?.loai === 'kyHD') {
+    const ung = Object.keys(t0.bangGia).filter((g) => t0.bangGia[g].rows.length === k.bg.rows.length);
+    const goi = k.bg.goi || ung[0];
+    k.ghep = goi ? K.ghepKyHD(t0, k.bg, goi) : { ok: false, loi: 'Chưa có bảng giá gói nào cùng số dòng để ghép mã HM — nhập file biểu giá của gói đó trước (hoặc cùng lúc).' };
+  }
+  const nam = (o) => Object.keys(o || {}).sort();
+  const html = kq.map((k, i) => {
+    if (k.loi) return `<div class="kl-imp bad"><b>${esc(k.f.name)}</b><p>${esc(k.loi)}</p></div>`;
+    if (!k.bg) return `<div class="kl-imp"><label class="kl-imph"><input type="checkbox" data-bi="${i}" checked> <b>${esc(k.f.name)}</b> <span class="kl-sub">không có Bảng giá HĐ chốt — dùng sheet "Tong hop HM"</span></label>
+      <p class="muted">${fmt(Object.keys(k.cat.hm).length, 0)} mã HM · gói ${k.cat.goi.map(goiTen).join(', ')} · năm ${k.cat.nam.join(', ')}. KL HĐ chỉ ghi cho gói chưa có bảng giá ký HĐ.</p></div>`;
+    const b = k.bg, c = b.checks;
+    const ok = b.loai === 'kyHD' ? k.ghep?.ok : true;
+    return `<div class="kl-imp ${ok ? '' : 'bad'}">
+      <label class="kl-imph"><input type="checkbox" data-bi="${i}" ${ok ? 'checked' : 'disabled'}> <b>${b.goi ? goiTen(b.goi) : '?'}</b> <span class="kl-sub">${esc(k.f.name)} › ${esc(b.sheet)}${b.lienDanh ? ' · liên danh ' + esc(b.doiTac || '') : ''}</span></label>
+      <div class="kl-impn"><span>${fmt(b.rows.length, 0)} dòng hạng mục</span>
+        ${b.loai === 'bghd' ? '<span class="pill grn mini">✓ ghép mã HM khớp 100% với ' + esc(b.goi) + '_11C</span>' : ''}
+        ${b.loai === 'kyHD' ? (k.ghep?.ok ? `<span class="pill grn mini">✓ khớp ${fmt(k.ghep.khop, 0)} dòng với bảng giá ${esc(b.goi)}</span> ${Object.entries(k.ghep.khac).filter(([, n]) => n).map(([f, n]) => `<span class="pill red mini">lệch ${f}: ${n} dòng</span>`).join('') || '<span class="pill grn mini">KL, đơn giá, thành tiền giống hệt</span>'}` : `<span class="pill red mini">${esc(k.ghep?.loi || 'không ghép được: lệch tại dòng ' + ((k.ghep?.khop ?? 0) + 1))}</span>`) : ''}</div>
+      <table class="kl-tb tight"><thead><tr><th>Năm</th><th class="r">Giá trị HĐ</th>${b.lienDanh ? '<th class="r">Phần Sapulico</th>' : ''}</tr></thead><tbody>
+        ${nam(b.tong).map((y) => `<tr><td>${y}</td><td class="r n">${fmt(b.tong[y], 0)}</td>${b.lienDanh ? `<td class="r n">${fmt(b.tongSap[y], 0)}</td>` : ''}</tr>`).join('')}
+        <tr><td><b>Cộng</b></td><td class="r n"><b>${fmt(sum(b.tong), 0)}</b></td>${b.lienDanh ? `<td class="r n"><b>${fmt(sum(b.tongSap), 0)}</b></td>` : ''}</tr></tbody></table>
+      ${c.ttSai ? `<p class="kl-warn">${c.ttSai} dòng thành tiền ≠ KL × đơn giá.</p>` : ''}${c.tachSai ? `<p class="kl-warn">${c.tachSai} dòng KL Sapulico + đối tác ≠ KL tổng.</p>` : ''}
+      ${c.namLech.map((x) => `<p class="kl-warn">⚠ Dòng NĂM ${x.y}${x.kv ? ' (' + esc(x.kv.slice(0, 40)) + ')' : ''}, dòng ${x.row}: ghi ${fmt(x.dongNam, 0)} — cộng các dòng ${fmt(x.congDong, 0)} (lệch ${fmt(x.dongNam - x.congDong, 0)} đ).</p>`).join('')}
+      ${S.bangGia?.[b.goi] ? `<p class="muted">Thay bảng giá ${goiTen(b.goi)} đang có (${esc(S.bangGia[b.goi].file)}).</p>` : ''}</div>`;
+  }).join('');
+  openModal('Xem trước — bảng giá hợp đồng', html + `<p class="muted">Mỗi file biểu giá chứa Bảng giá HĐ của cả 4 gói — app chỉ lấy bản chốt của chính gói đó (sheet "BGHD" hoặc "BGHD Gx" theo tên file).</p>
+    <div class="sheet-f"><button class="btn ghost" data-x>Huỷ</button><button class="btn amber" data-ap>Áp dụng</button></div>`, {
+    wide: true,
+    onMount: (el, close) => { el.querySelector('[data-ap]').onclick = async () => {
+      const chon = kq.filter((k, i) => el.querySelector(`[data-bi="${i}"]`)?.checked);
+      let soGoi = 0, canh = [];
+      await api.mutate(() => {
+        S.bangGia ||= {};
+        for (const k of chon) if (k.cat) K.gopDanhMuc(S, k.cat);   // tên/ĐVT trước
+        for (const k of chon) if (k.bg?.loai === 'bghd') { canh = canh.concat(K.apBangGiaKy(S, k.bg).canhBao); soGoi++; }
+        for (const k of chon) if (k.bg?.loai === 'kyHD' && k.ghep?.ok) { const r = K.ghepKyHD(S, k.bg, k.bg.goi); if (r.ok) { canh = canh.concat(K.apBangGiaKy(S, k.bg).canhBao); soGoi++; } }
+        const c0 = chon.find((k) => k.cat); if (c0 && !S.catalogNguon) S.catalogNguon = { file: c0.f.name, ngay: new Date().toISOString() };
+      });
+      close(); api.toast(`Đã nhập bảng giá ký HĐ ${soGoi} gói${canh.length ? ` · ${canh.length} cảnh báo đơn giá` : ''}.`, canh.length ? 'err' : 'ok'); rerender();
+    }; },
+  });
 }
 
 // ---- Nhập phụ lục ----

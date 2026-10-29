@@ -217,6 +217,51 @@ if (FIX && fs.existsSync(FIX)) {
   }
 }
 
+
+// ---- Bảng giá ký hợp đồng (file thật, đặt KL_BG = thư mục chứa 5 file) ----
+const BG = process.env.KL_BG;
+if (BG && fs.existsSync(BG)) {
+  const files = fs.readdirSync(BG);
+  const tim = (re) => path.join(BG, files.find((f) => re.test(f)));
+  const docBG = (fp) => {
+    const buf = fs.readFileSync(fp); const name = path.basename(fp).replace(/^[0-9a-f]{8}-/, '');
+    const names = XLSX.read(buf, { type: 'buffer', bookSheets: true }).SheetNames;
+    const chon = P.chonSheetBangGia(names, name);
+    const wb = XLSX.read(buf, { type: 'buffer', sheets: names.filter((n) => n === chon.sheet || /^G\d+_11C$/i.test(n) || n === 'Tong hop HM') });
+    return { res: P.parseBangGiaKy(XLSX, wb, name), wb };
+  };
+  const sum = (o) => Object.values(o).reduce((a, b) => a + b, 0);
+  const g1 = docBG(tim(/^.{9}G1_Bieu/)).res, g2 = docBG(tim(/^.{9}G2_Bieu/)).res, g3 = docBG(tim(/^.{9}G3_BANG/)).res;
+  const d4 = docBG(tim(/^.{9}G4_Bieu/)); const g4 = d4.res;
+  eq([g1.goi, g1.sheet, g1.rows.length, Math.round(sum(g1.tong)), g1.lienDanh], ['G1', 'BGHD', 1648, 373085620257, false], 'BG G1: bản chốt "BGHD", 1.648 dòng, tổng 373.085.620.257 (= giá trị HĐ đã ký)');
+  eq([g2.goi, g2.sheet, g2.rows.length, Math.round(sum(g2.tong)), Math.round(sum(g2.tongSap))], ['G2', 'BGHD G2', 4288, 498533365649, 488346802785], 'BG G2: chọn "BGHD G2" theo tên file; phần Sapulico 488.346.802.785');
+  eq(g2.checks.namLech.map((x) => [x.y, x.dongNam - x.congDong]), [[2029, -217]], 'BG G2: phát hiện dòng NĂM 2029 (Cần Giờ) lệch −217 đ so với cộng dòng');
+  eq([g3.goi, g3.sheet, g3.rows.length, Math.round(sum(g3.tong)), Math.round(sum(g3.tongSap)), g3.doiTac], ['G3', 'BGHD', 1900, 587595519824, 528412962657, 'CTCP Cơ khí điện Lữ Gia'], 'BG G3: sheet "BGHD" nhận gói theo tên file, liên danh Lữ Gia');
+  eq([g4.goi, g4.rows.length, Math.round(sum(g4.tong)), Math.round(sum(g4.tongSap))], ['G4', 1942, 256905404980, 128300705356], 'BG G4: tổng 256.905.404.980, Sapulico 128.300.705.356');
+  eq([g1, g2, g3, g4].map((r) => [r.checks.ttSai, r.checks.tachSai]), [[0, 0], [0, 0], [0, 0], [0, 0]], 'BG: thành tiền = KL × ĐG, KL Sapulico + đối tác = tổng ở cả 4 gói');
+  // gói 3 không có số gói trong tên file → dò theo ghép mã
+  { const buf = fs.readFileSync(tim(/^.{9}G3_BANG/)); const names = XLSX.read(buf, { type: 'buffer', bookSheets: true }).SheetNames;
+    const wb = XLSX.read(buf, { type: 'buffer', sheets: names.filter((n) => n === 'BGHD' || /_11C$/.test(n)) });
+    eq(P.parseBangGiaKy(XLSX, wb, 'bang gia.xlsb').goi, 'G3', 'BG: tên file không có số gói → nhận G3 nhờ ghép khớp G3_11C'); }
+  // áp vào kho
+  const st = K.emptyState();
+  const cat = P.parseHMCatalog(XLSX, d4.wb); st.catalog = cat.hm;
+  K.apBangGiaKy(st, g1); K.apBangGiaKy(st, g4);
+  eq([st.catalog.HM021.goi.G1.kl[2026], st.catalog.HM005.goi.G4.dgNam[2027], st.catalog.HM005.goi.G4.dgNam[2028]], [160769, 79944, 79818], 'Áp BG: KL G1 HM021-2026; đơn giá ký HĐ theo năm (G4 HM005 2027 ≠ 2028)');
+  eq(st.catalog.HM001.goi.G4.klSap[2026], 41, 'Áp BG: KL phần Sapulico G4 HM001-2026 = 41 (tổng 162)');
+  // file ký HĐ Thủ Đức (không mã HM) → ghép theo bảng giá G4 đã nhập
+  const td = docBG(tim(/Copy\.xlsx$/)).res;
+  eq([td.loai, td.rows.length], ['kyHD', 1942], 'Ký HĐ Thủ Đức: nhận dạng file 1 sheet không mã HM');
+  const gh = K.ghepKyHD(st, td, 'G4');
+  eq([gh.ok, gh.khop, gh.khac], [true, 1942, { kl: 0, klSap: 0, dg: 0, tt: 0 }], 'Ký HĐ Thủ Đức ghép 1.942/1.942 dòng với BGHD G4, không lệch KL/ĐG/thành tiền');
+  // đối chiếu phần Sapulico
+  st.phuLuc.push({ id: 'p', loai: 'PLI', namKH: 2026 });
+  st.viTri.push({ id: 'x1', plId: 'p', goi: 'G4', donVi: 'CS Thủ Đức', kl: 1, chiTiet: [{ ma: 'HM001', kl: 30 }], trangThai: 'chua' },
+    { id: 'x2', plId: 'p', goi: 'G4', donVi: 'Lữ Gia', kl: 1, chiTiet: [{ ma: 'HM001', kl: 100 }], trangThai: 'chua' });
+  const ld = K.doiChieu(st, 'G4', 2026).rows[0], sp = K.doiChieu(st, 'G4', 2026, { phan: 'sap' }).rows[0];
+  eq([ld.hd, ld.kh, ld.dg, sp.hd, sp.kh], [162, 130, 48979, 41, 30], 'Đối chiếu: cả liên danh (HĐ 162, KH 130) / phần Sapulico (HĐ 41, KH 30 — bỏ vị trí Lữ Gia), đơn giá ký HĐ');
+} else { skip++; console.log('… bỏ qua test bảng giá ký HĐ thật (chưa đặt KL_BG)'); }
+
 const HMF = process.env.KL_HM;
 if (HMF && fs.existsSync(HMF)) {
   const wb = XLSX.read(fs.readFileSync(HMF), { type: 'buffer', sheets: ['Tong hop HM', 'G1_11C', 'G2_11C', 'G3_11C', 'G4_11C'] });

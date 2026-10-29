@@ -63,3 +63,12 @@ Quy đổi mã hiệu định mức (BA…/CS…) trong dự toán tháng sang m
 
 ## Thứ tự làm
 Bước 1 doc (file này) → **Chốt UI** (2 phương án màn "Vị trí" + màn "Đối chiếu HM", có màn ngang điện thoại) → Bước 2 test (bộ đọc trên 3 file thật, đối chiếu, xuất vòng tròn) → Bước 3 code → Bước 4 review độc lập → Bước 5 kiểm chứng → đẩy GitHub từ máy jd.
+
+## Bổ sung 29/10/2026 — Bảng giá ký hợp đồng làm nguồn KL HĐ chuẩn
+- Nút "⤓ Bảng giá HĐ" nhận nhiều file một lần: 4 file biểu giá G1–G4 (.xlsb) và file "Bảng giá ký HĐ" 1 sheet (vd Thủ Đức).
+- Mỗi file biểu giá chứa BGHD của cả 4 gói; app chỉ lấy **bản chốt**: sheet "BGHD" (không hậu tố) hoặc "BGHD Gx" theo số gói trong tên file. Mã HM ghép theo dòng tương ứng của Gx_11C cùng file (phải khớp 100% năm + tên).
+- File ký HĐ không có mã HM → ghép theo thứ tự với bảng giá đã nhập của gói cùng số dòng; báo số dòng lệch KL / KL Sapulico / đơn giá / thành tiền.
+- Lưu theo gói: KL tổng liên danh, **KL phần Sapulico**, **đơn giá ký HĐ theo năm** (2026 VAT 8%, 2027–2029 VAT 10%). Gói đã có bảng giá ký thì "Tong hop HM" không ghi đè.
+- Kiểm tra khi nhập: thành tiền = KL × ĐG; KL Sapulico + đối tác = tổng; dòng NĂM … = cộng các dòng (phát hiện −217 đ gõ tay ở G2/Cần Giờ/2029).
+- Đối chiếu HM có thêm "Phạm vi: Cả liên danh / Phần Sapulico" (phần Sapulico bỏ các vị trí có đơn vị Lữ Gia / Phú Thọ).
+- Test: 107 (thêm 12 test trên 5 file thật: tổng G1 373.085.620.257 = giá trị HĐ đã ký; G4 Sapulico 128.300.705.356; Thủ Đức khớp 1.942/1.942 dòng).

@@ -1,5 +1,5 @@
 // store.js — Trạng thái trong bộ nhớ + cache offline (IndexedDB) + nháp cục bộ.
-import { SEED } from '../sample/seed.js';
+import { SEED, laDemoCu } from '../sample/seed.js';
 
 const DB_NAME = 'hdduytu';
 const STORE = 'kv';
@@ -47,6 +47,14 @@ function notify() { subs.forEach(fn => fn(state)); }
 export function getState() { return state; }
 export function getData() { return state.data; }
 
+/** Dữ liệu còn là bản demo cũ → thay danh sách HĐ bằng 04 HĐ thật, GIỮ NGUYÊN phần KL vị trí (klvt) và mọi nhánh khác. */
+export function thayDemo(d) {
+  if (!laDemoCu(d)) return false;
+  d.contracts = structuredClone(SEED.contracts);
+  d.version = SEED.version; d.nguonDuLieu = SEED.nguonDuLieu;
+  return true;
+}
+
 /** Kiểm tra dữ liệu hợp lệ (có mảng contracts). */
 export function hopLe(d) { return !!d && Array.isArray(d.contracts); }
 
@@ -57,6 +65,7 @@ export async function loadFromCache() {
     state.data = cached.data;
     state.baseModifiedTime = cached.modifiedTime || null;
     state.loadedFrom = 'cache';
+    if (thayDemo(state.data)) { state.dirty = true; await idbSet('data', { data: state.data, modifiedTime: state.baseModifiedTime }); }
     notify();
     return true;
   }
@@ -68,15 +77,16 @@ export async function setFromDrive(data, modifiedTime) {
   if (!hopLe(data)) throw new Error('File dữ liệu trên Drive sai định dạng (thiếu danh sách hợp đồng).');
   state.data = data;
   state.baseModifiedTime = modifiedTime || null;
-  state.dirty = false;
+  state.dirty = thayDemo(data);
   state.loadedFrom = 'drive';
   await idbSet('data', { data, modifiedTime });
   notify();
 }
 
-/** Nạp dữ liệu mẫu (demo). */
+/** Nạp dữ liệu khởi tạo (04 HĐ thật). Giữ các nhánh khác đang có (vd klvt). */
 export async function loadSeed() {
-  state.data = structuredClone(SEED);
+  const giu = state.data && hopLe(state.data) ? state.data : {};
+  state.data = { ...giu, ...structuredClone(SEED) };
   state.dirty = true;
   state.loadedFrom = 'seed';
   await idbSet('data', { data: state.data, modifiedTime: null });

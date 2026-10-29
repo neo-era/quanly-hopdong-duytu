@@ -276,12 +276,14 @@ export function docBGHD(XLSX, ws) {
 /** Dòng hạng mục của sheet Gx_11C (bảng giá dự thầu): có mã HM ở cột B. */
 export function doc11C(XLSX, ws) {
   const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' });
-  let y = null; const out = [];
+  let y = null, nhom = ''; const out = [];
   for (const r of rows) {
     const d = nfc(r[3]); const m = d.match(/^NĂM\s*(\d{4})/i);
     if (m) { y = +m[1]; continue; }
     const ma = nfc(r[1]);
-    if (/^HM/i.test(ma)) out.push({ y, ma, ten: d, dvt: nfc(r[6]), kl: isNum(r[5]) ? r[5] : null, dg: isNum(r[7]) ? r[7] : null });
+    if (/^HM/i.test(ma)) { out.push({ y, ma, ten: d, dvt: nfc(r[6]), kl: isNum(r[5]) ? r[5] : null, dg: isNum(r[7]) ? r[7] : null, nhom }); continue; }
+    if (/QUẢN LÝ VẬN HÀNH/i.test(d)) nhom = 'QLVH'; else if (/^Bảo dưỡng thường xuyên/i.test(d)) nhom = 'BDTX';
+    else if (/KHÔNG THƯỜNG XUYÊN/i.test(d)) nhom = 'DTKTX'; else if (/duy tu bảo dưỡng/i.test(d)) nhom = ''; else if (/Trung tâm điều khiển/i.test(d) && !ma) nhom = 'TTDK';
   }
   return out;
 }
@@ -310,7 +312,7 @@ export function parseBangGiaKy(XLSX, wb, fileName = '') {
     const thu = chon.goi ? c11s.filter((c) => c.goi === chon.goi) : c11s;
     for (const c of thu) {
       const g = ghepMa(b.rows, c.rows);
-      if (g.ok) { res.goi = c.goi; res.ghep = g; b.rows.forEach((x, i) => { x.ma = c.rows[i].ma; x.dgDuThau = c.rows[i].dg; }); break; }
+      if (g.ok) { res.goi = c.goi; res.ghep = g; b.rows.forEach((x, i) => { x.ma = c.rows[i].ma; x.dgDuThau = c.rows[i].dg; x.nhom = c.rows[i].nhom || ''; }); break; }
       res.ghep = g;
     }
     if (!res.ghep?.ok) throw new Error(`Không ghép được mã HM cho ${chon.sheet}: ${res.ghep ? `lệch ở dòng ${res.ghep.khop + 1}` : 'không có sheet Gx_11C'}.`);
@@ -329,4 +331,42 @@ export function parseBangGiaKy(XLSX, wb, fileName = '') {
   res.checks = { ttSai, tachSai, namLech };
   res.tong = tong; res.tongSap = tongSap;
   return res;
+}
+
+// ================== Biểu khối lượng theo Mã gói thầu + Mã HM (file đơn vị: G101TT, G201NA, G301TB…) ==================
+/** Mã gói thầu đã thấy trong file thật của Công ty. Gói Thủ Đức chưa có mã → để trống, người dùng tự nhập. */
+export const MA_GOI_THAU = { G1: 'G101TT', G2: 'G201NA', G3: 'G301TB' };
+export const NHOM_HM = { QLVH: 'Quản lý vận hành', BDTX: 'Bảo dưỡng thường xuyên', DTKTX: 'Duy tu không thường xuyên', TTDK: 'Trung tâm điều khiển' };
+
+/**
+ * Đọc các sheet có dòng tiêu đề "Mã gói thầu | Mã Hạng mục công tác | Năm công tác | Nhóm hạng mục công tác | … | Đơn giá | KL hợp đồng | …".
+ * Các cột số sau cột KL hợp đồng (đến trước cột "Đơn vị") là các cột KL (thực hiện, giao, dự kiến, nhóm vốn…), giữ nguyên tên cột của file.
+ */
+export function parseBieuMaGoi(XLSX, wb) {
+  const out = [];
+  for (const sn of wb.SheetNames) {
+    const ws = wb.Sheets[sn]; if (!ws || !ws['!ref']) continue;
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' });
+    const hi = rows.slice(0, 15).findIndex((r) => nfc(r[0]) === 'Mã gói thầu' && /^Mã Hạng mục/i.test(nfc(r[1])));
+    if (hi < 0) continue;
+    const H = rows[hi].map(nfc);
+    const cDV = H.findIndex((t, i) => i > 8 && /^Đơn vị$/i.test(t));
+    const end = cDV > 0 ? cDV : H.length;
+    const cols = [];
+    for (let i = 9; i < end; i++) if (H[i]) cols.push({ i, ten: H[i] });
+    const data = [];
+    for (const r of rows.slice(hi + 1)) {
+      const maGoi = nfc(r[0]), ma = nfc(r[1]);
+      if (!/^G\d/i.test(maGoi) || !/^HM/i.test(ma)) continue;
+      data.push({ maGoi, ma, nam: +r[2] || null, nhom: nfc(r[3]), stt: r[4], ten: nfc(r[5]), dvt: nfc(r[6]), dg: isNum(r[7]) ? r[7] : null,
+        klHD: isNum(r[8]) ? r[8] : null, v: cols.map((c) => (isNum(r[c.i]) ? r[c.i] : 0)), donVi: cDV > 0 ? nfc(r[cDV]) : '' });
+    }
+    if (!data.length) continue;
+    const donVi = [...new Set(data.map((d) => d.donVi).filter(Boolean))];
+    const maGoi = [...new Set(data.map((d) => d.maGoi))];
+    const chinh = Math.max(0, cols.findIndex((c) => /dự kiến/i.test(c.ten)));
+    const giaTri = cols.map((c, j) => Math.round(data.reduce((a, d) => a + d.v[j] * (d.dg || 0), 0)));
+    out.push({ sheet: sn, cotKLHD: H[8], cols: cols.map((c) => c.ten), chinh, donVi, maGoi, nam: [...new Set(data.map((d) => d.nam))], rows: data, giaTri });
+  }
+  return out;
 }

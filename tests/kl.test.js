@@ -262,6 +262,32 @@ if (BG && fs.existsSync(BG)) {
   eq([ld.hd, ld.kh, ld.dg, sp.hd, sp.kh], [162, 130, 48979, 41, 30], 'Đối chiếu: cả liên danh (HĐ 162, KH 130) / phần Sapulico (HĐ 41, KH 30 — bỏ vị trí Lữ Gia), đơn giá ký HĐ');
 } else { skip++; console.log('… bỏ qua test bảng giá ký HĐ thật (chưa đặt KL_BG)'); }
 
+
+// ---- Mã gói thầu + biểu đơn vị (file thật KL_MA = thư mục G101TT/G201NA/G301TB, KL_BG có file CSB) ----
+const MA = process.env.KL_MA;
+if (BG && MA && fs.existsSync(MA)) {
+  const files = fs.readdirSync(BG); const tim = (re) => path.join(BG, files.find((f) => re.test(f)));
+  const doc = (fp, name) => { const buf = fs.readFileSync(fp); const names = XLSX.read(buf, { type: 'buffer', bookSheets: true }).SheetNames; const ch = P.chonSheetBangGia(names, name);
+    return P.parseBangGiaKy(XLSX, XLSX.read(buf, { type: 'buffer', sheets: names.filter((n) => n === ch.sheet || /_11C$/.test(n)) }), name); };
+  const st = K.emptyState();
+  for (const [re, nm] of [[/G1_Bieu/, 'G1_x.xlsb'], [/G2_Bieu/, 'G2_x.xlsb'], [/G3_BANG/, 'G3_x.xlsb'], [/G4_Bieu/, 'G4_x.xlsb']]) K.apBangGiaKy(st, doc(tim(re), nm));
+  eq([st.catalog.HM001.nhom, st.catalog.HM048.nhom, st.catalog.HM554?.nhom], ['QLVH', 'BDTX', 'TTDK'], 'Nhóm HM lấy theo đề mục Gx_11C (QLVH/BDTX/TTDK)');
+  eq([st.bangGia.G1.maGoiThau, st.bangGia.G2.maGoiThau, st.bangGia.G3.maGoiThau, st.bangGia.G4.maGoiThau], ['G101TT', 'G201NA', 'G301TB', ''], 'Mã gói thầu G1–G3 theo file Công ty; Thủ Đức chưa có mã');
+  const csb = P.parseBieuMaGoi(XLSX, XLSX.read(fs.readFileSync(tim(/G101TT-2026BSV-CSB/)), { type: 'buffer' }));
+  eq([csb.length, csb[0].rows.length, csb[0].donVi, csb[0].maGoi, csb[0].cols[csb[0].chinh].slice(0, 30), csb[0].giaTri[csb[0].chinh]], [1, 412, ['CSKVB'], ['G101TT'], 'Khối lượng/Giá trị dự kiến thự', 7549420089], 'Biểu CSB: 412 mã, đơn vị CSKVB, cột chính "dự kiến thực hiện" = 7.549.420.089 đ');
+  const kt = K.kiemBieuDV(st, csb[0]);
+  eq([kt.khongCoMa.length, kt.lechNhom.length, kt.lechDG.length, kt.lechKL.length], [0, 0, 0, 0], 'Biểu CSB khớp danh mục: mã, nhóm, đơn giá ký, KL HĐ');
+  for (const f of ['G101TT', 'G201NA', 'G301TB']) {
+    const b = P.parseBieuMaGoi(XLSX, XLSX.read(fs.readFileSync(path.join(MA, f + '.xlsb')), { type: 'buffer' })).find((x) => x.sheet === 'Sheet1');
+    const k2 = K.kiemBieuDV(st, b);
+    eq([b.maGoi, k2.khongCoMa.length, k2.lechNhom.length, k2.lechDG.length, k2.lechKL.length], [[f], 0, 0, 0, 0], `Biểu ${f} (Sheet1) khớp danh mục ký HĐ`);
+  }
+  K.themBieuDV(st, csb[0], { file: 'CSB.xlsb' });
+  const d = K.doiChieu(st, 'G1', 2026);
+  const co = d.rows.filter((r) => r.khDV > 0);
+  eq([d.maGoiThau, d.coBieuDV, co.length > 0, co.every((r) => r.hd === st.catalog[r.ma].goi.G1.kl[2026])], ['G101TT', true, true, true], 'Đối chiếu G1-2026 có cột KH đơn vị từ biểu G101TT, KL HĐ theo bảng giá ký');
+  eq(Math.round(d.tienDV), 7549420089, 'Giá trị KH đơn vị = 7.549.420.089 đ (khớp dòng NĂM 2026 cột dự kiến của file)');
+} else { skip++; console.log('… bỏ qua test mã gói thầu (chưa đặt KL_MA)'); }
 const HMF = process.env.KL_HM;
 if (HMF && fs.existsSync(HMF)) {
   const wb = XLSX.read(fs.readFileSync(HMF), { type: 'buffer', sheets: ['Tong hop HM', 'G1_11C', 'G2_11C', 'G3_11C', 'G4_11C'] });

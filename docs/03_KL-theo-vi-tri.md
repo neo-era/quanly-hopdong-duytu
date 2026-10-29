@@ -72,3 +72,10 @@ Bước 1 doc (file này) → **Chốt UI** (2 phương án màn "Vị trí" + m
 - Kiểm tra khi nhập: thành tiền = KL × ĐG; KL Sapulico + đối tác = tổng; dòng NĂM … = cộng các dòng (phát hiện −217 đ gõ tay ở G2/Cần Giờ/2029).
 - Đối chiếu HM có thêm "Phạm vi: Cả liên danh / Phần Sapulico" (phần Sapulico bỏ các vị trí có đơn vị Lữ Gia / Phú Thọ).
 - Test: 107 (thêm 12 test trên 5 file thật: tổng G1 373.085.620.257 = giá trị HĐ đã ký; G4 Sapulico 128.300.705.356; Thủ Đức khớp 1.942/1.942 dòng).
+
+## Bổ sung 29/10/2026 (2) — Mã gói thầu + Mã hạng mục
+- Khoá chuẩn: Mã gói thầu + Mã HM + Năm. Mã gói thầu theo file Công ty: G101TT (Gói 1), G201NA (Gói 2), G301TB (Gói 3); Gói Thủ Đức chưa có mã — nhập ở thẻ bảng giá ký HĐ (tab Phụ lục đã nhập).
+- Nhóm hạng mục (QLVH / BDTX / DTKTX / TTDK) lấy theo đề mục Gx_11C; Thủ Đức lấy theo cùng mã ở gói khác.
+- Nút "⤓ Biểu KL đơn vị": đọc sheet có tiêu đề "Mã gói thầu | Mã Hạng mục công tác | Năm công tác | Nhóm…"; kiểm tra mã/nhóm/đơn giá/KL HĐ với bảng giá ký; chọn cột làm "KH đơn vị" (mặc định cột "dự kiến"); cùng file có nhiều sheet cùng mã gói → chỉ chọn 1 sheet sạch.
+- Đối chiếu HM: lọc theo nhóm HM, hiện mã gói thầu, cột "KH đơn vị", cảnh báo mã HM có KH đơn vị vượt KL HĐ năm.
+- Kết quả thật: biểu CSKVB (G101TT-2026BSV-CSB_v1) 412 mã khớp bảng giá ký; giá trị dự kiến 7.549.420.089 đ; 9 mã vượt KL HĐ Gói 1 năm 2026.

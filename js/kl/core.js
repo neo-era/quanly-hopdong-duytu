@@ -6,6 +6,7 @@
 //   phuLuc: [{ id, loai, sheet, file, tieuDe, congVan, dot, nhomVon, namKH, donGia, header, nhom:[tên phường theo thứ tự] }]
 //   viTri:  [{ id, plId, stt, tram, phuong, tuyen, nhom, kl, goi, donVi, dot, donGia, …cột riêng,
 //              chiTiet:[{ma, kl}], trangThai:'chua'|'dang'|'da', thangNT, thucHien: {ma: kl} | null }]
+import { MA_GOI_THAU } from './parse.js';
 
 export const LOAI_TEN = { PLI: 'PL I · Thay/sửa tủ', PLII: 'PL II · HPS→LED', PLIII: 'PL III · Sửa/thay trụ', PLIV: 'PL IV · Trụ trang trí' };
 
@@ -129,6 +130,15 @@ export function doiChieu(st, goi, nam, { phan = 'ld' } = {}) {
     for (const c of v.chiTiet || []) { const a = get(c.ma); a.kh += +c.kl || 0; if (!seen.has(c.ma)) { a.nVT++; seen.add(c.ma); } }
     for (const [ma, kl] of Object.entries(klTH(v))) get(ma).th += +kl || 0;
   }
+  // KL kế hoạch theo biểu mã gói thầu của các đơn vị (cột chính của từng biểu)
+  const maGT = maGoiThauCua(st, goi);
+  const dvMap = new Map();
+  if (maGT) for (const bd of st.bieuDV || []) for (const r of bd.rows) {
+    if (r[0] !== maGT || +r[2] !== +nam) continue;
+    const v = +r[3 + bd.chinh] || 0; if (!v && !acc.has(r[1])) continue;
+    const o = dvMap.get(r[1]) || { tong: 0, theo: [] }; o.tong += v; o.theo.push({ id: bd.id, donVi: bd.donVi.join(', ') || bd.file, v }); dvMap.set(r[1], o);
+    get(r[1]);
+  }
   const rows = [...acc.values()].map((a) => {
     const it = st.catalog[a.ma];
     const g = it?.goi?.[goi];
@@ -138,7 +148,9 @@ export function doiChieu(st, goi, nam, { phan = 'ld' } = {}) {
     return {
       ma: a.ma, ten: it?.ten || '', dvt: it?.dvt || '', hd, kh, th, nVT: a.nVT,
       khConLai: round(kh - th), hdConLai: round(hd - kh), vuot: kh - hd > 1e-9,
-      khongCoTrongHD: !it, dg, tienKH: kh * dg, tienTH: th * dg,
+      khongCoTrongHD: !it, dg, tienKH: kh * dg, tienTH: th * dg, nhom: it?.nhom || '',
+      khDV: dvMap.has(a.ma) ? round(dvMap.get(a.ma).tong) : null, khDVTheo: dvMap.get(a.ma)?.theo || [],
+      vuotDV: dvMap.has(a.ma) && dvMap.get(a.ma).tong - hd > 1e-9,
     };
   });
   rows.sort((x, y) => (y.vuot - x.vuot) || ((y.vuot ? y.kh - y.hd : 0) - (x.vuot ? x.kh - x.hd : 0)) || x.ma.localeCompare(y.ma, 'vi', { numeric: true }));
@@ -148,6 +160,8 @@ export function doiChieu(st, goi, nam, { phan = 'ld' } = {}) {
     chuaGanHM: vts.filter((v) => !(v.chiTiet || []).length).length,
     soVT: vts.length, soVTDaTH: vts.filter((v) => v.trangThai === 'da').length,
     tienKH: rows.reduce((a, r) => a + r.tienKH, 0),
+    maGoiThau: maGT, coBieuDV: dvMap.size > 0, soVuotDV: rows.filter((r) => r.vuotDV).length,
+    tienDV: rows.reduce((a, r) => a + (r.khDV || 0) * r.dg, 0),
   };
 }
 
@@ -235,7 +249,7 @@ export function apBangGiaKy(st, res) {
   const agg = new Map(); const canhBao = [];
   for (const x of res.rows) {
     const k = `${x.ma}|${x.y}`;
-    const a = agg.get(k) || { ma: x.ma, y: x.y, kl: 0, klSap: 0, tt: 0, ttSap: 0, dg: x.dg, ten: x.ten, dvt: x.dvt };
+    const a = agg.get(k) || { ma: x.ma, y: x.y, kl: 0, klSap: 0, tt: 0, ttSap: 0, dg: x.dg, ten: x.ten, dvt: x.dvt, nhom: x.nhom || '' };
     a.kl = round(a.kl + (x.kl || 0)); a.klSap = round(a.klSap + (x.klSap ?? x.kl ?? 0));
     a.tt += x.tt || 0; a.ttSap += x.ttSap ?? x.tt ?? 0;
     if (x.dg !== a.dg) canhBao.push(`${x.ma} năm ${x.y}: 2 đơn giá ${a.dg} / ${x.dg}`);
@@ -245,6 +259,7 @@ export function apBangGiaKy(st, res) {
   for (const it of Object.values(st.catalog)) if (it.goi?.[goi]) it.goi[goi] = { kl: {}, klSap: {}, dgNam: {}, dg: null };
   for (const a of agg.values()) {
     const it = (st.catalog[a.ma] ||= { ten: a.ten, dvt: a.dvt, dgChuaVat: null, goi: {} });
+    if (a.nhom && !it.nhom) it.nhom = a.nhom;
     const g = (it.goi[goi] ||= { kl: {}, klSap: {}, dgNam: {}, dg: null });
     g.kl ||= {}; g.klSap ||= {}; g.dgNam ||= {};
     g.kl[a.y] = a.kl; g.klSap[a.y] = a.klSap; g.dgNam[a.y] = a.dg;
@@ -254,6 +269,7 @@ export function apBangGiaKy(st, res) {
   st.catalogNam = [...new Set([...(st.catalogNam || []), ...nam])].sort();
   st.bangGia[goi] = {
     file: res.file, sheet: res.sheet, ngay: new Date().toISOString(), lienDanh: res.lienDanh, doiTac: res.doiTac,
+    maGoiThau: st.bangGia[goi]?.maGoiThau || MA_GOI_THAU[goi] || '',
     tong: res.tong, tongSap: res.tongSap, rows: res.rows.map((x) => [x.y, x.ma, x.kl ?? 0, x.klSap ?? x.kl ?? 0, x.dg ?? 0, x.tt ?? 0]),
   };
   return { soMa: new Set(res.rows.map((x) => x.ma)).size, canhBao };
@@ -269,3 +285,39 @@ export function gopDanhMuc(st, cat) {
   }
   st.catalogNam = [...new Set([...(st.catalogNam || []), ...(cat.nam || [])])].sort();
 }
+
+// ================== Mã gói thầu + biểu KL của đơn vị ==================
+/** Mã gói thầu của 1 gói: ưu tiên mã người dùng đã nhập cho bảng giá ký, sau đó mã đã biết (G101TT…). */
+export function maGoiThauCua(st, goi) { return st.bangGia?.[goi]?.maGoiThau || st.maGoiThau?.[goi] || MA_GOI_THAU[goi] || ''; }
+export function goiCuaMaGoiThau(st, maGT) {
+  const all = { ...MA_GOI_THAU, ...(st.maGoiThau || {}) };
+  for (const [g, b] of Object.entries(st.bangGia || {})) if (b.maGoiThau) all[g] = b.maGoiThau;
+  return Object.keys(all).find((g) => all[g] === maGT) || null;
+}
+/** Kiểm tra 1 biểu đơn vị với danh mục: mã HM có trong HĐ, nhóm, đơn giá ký, KL HĐ (tổng hoặc phần Sapulico). */
+export function kiemBieuDV(st, b) {
+  const kq = { khongCoMa: [], lechNhom: [], lechDG: [], lechKL: [], khongRoGoi: [] };
+  for (const d of b.rows) {
+    const goi = goiCuaMaGoiThau(st, d.maGoi);
+    if (!goi) { kq.khongRoGoi.push(d.maGoi); continue; }
+    const it = st.catalog[d.ma]; const g = it?.goi?.[goi];
+    if (!it || !g) { kq.khongCoMa.push(d.ma); continue; }
+    if (d.nhom && it.nhom && d.nhom !== it.nhom) kq.lechNhom.push(`${d.ma}: ${d.nhom} ≠ ${it.nhom}`);
+    const dg = g.dgNam?.[d.nam] ?? g.dg;
+    if (d.dg !== null && dg !== null && dg !== undefined && Math.abs(d.dg - dg) > 0.5) kq.lechDG.push(`${d.ma} ${d.nam}: ${d.dg} ≠ ${dg}`);
+    const kl = g.kl?.[d.nam], ks = g.klSap?.[d.nam];
+    if (d.klHD !== null && kl !== undefined && Math.abs(d.klHD - kl) > 1e-6 && (ks === undefined || Math.abs(d.klHD - ks) > 1e-6)) kq.lechKL.push(`${d.ma} ${d.nam}: ${d.klHD} ≠ ${kl}`);
+  }
+  kq.khongRoGoi = [...new Set(kq.khongRoGoi)];
+  return kq;
+}
+/** Lưu biểu đơn vị (thay bản cũ cùng file + sheet). chinh = chỉ số cột KL dùng làm "KH đơn vị". */
+export function themBieuDV(st, b, { file = '', chinh = b.chinh } = {}) {
+  st.bieuDV ||= [];
+  const old = st.bieuDV.find((x) => x.file === file && x.sheet === b.sheet);
+  const rec = { id: old?.id || uid('bdv'), file, sheet: b.sheet, ngay: new Date().toISOString(), donVi: b.donVi, maGoi: b.maGoi, nam: b.nam,
+    cols: b.cols, chinh: +chinh, rows: b.rows.map((d) => [d.maGoi, d.ma, d.nam, ...d.v]) };
+  st.bieuDV = st.bieuDV.filter((x) => x !== old).concat([rec]);
+  return rec;
+}
+export function xoaBieuDV(st, id) { st.bieuDV = (st.bieuDV || []).filter((x) => x.id !== id); }

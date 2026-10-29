@@ -1,5 +1,5 @@
 // worker.js — Luồng nền đọc file Excel (file bảng giá 10 MB mất ~20–30 giây, không được làm treo giao diện).
-import { parsePLWorkbook, parseHMCatalog, boSungTuSheetCon, findSubsetSheets, chonSheetBangGia, parseBangGiaKy } from './parse.js';
+import { parsePLWorkbook, parseHMCatalog, boSungTuSheetCon, findSubsetSheets, chonSheetBangGia, parseBangGiaKy, parseBieuMaGoi } from './parse.js';
 
 let XLSX = null;
 async function lib() {
@@ -17,7 +17,11 @@ self.onmessage = async (e) => {
     say(5, 'Đang nạp thư viện Excel…');
     const X = await lib();
     say(15, `Đang đọc ${name}…`);
-    if (kind === 'bg') {
+    if (kind === 'dv') {
+      const wb = X.read(buf, { type: 'array' });
+      say(70, 'Đang đọc mã gói thầu, mã hạng mục…');
+      self.postMessage({ id, done: true, result: parseBieuMaGoi(X, wb) });
+    } else if (kind === 'bg') {
       // Bảng giá HĐ: đọc danh sách sheet trước, rồi chỉ đọc bản chốt + Gx_11C + Tong hop HM (file 10 MB)
       const names = X.read(buf, { type: 'array', bookSheets: true }).SheetNames;
       const chon = chonSheetBangGia(names, name);

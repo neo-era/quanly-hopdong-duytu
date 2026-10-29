@@ -46,7 +46,7 @@ function renderHeader() {
     ? `<button class="btn ${st.dirty ? 'amber' : 'ghost'}" id="btnSave" ${st.dirty ? '' : 'disabled'}>
          ${st.dirty ? '● Lưu lên Drive' : 'Đã lưu'}</button>`
     : '';
-  const src = { drive: 'Drive', cache: 'Bộ nhớ máy (offline)', seed: 'Dữ liệu mẫu' }[st.loadedFrom] || '—';
+  const src = { drive: 'Drive', cache: 'Bộ nhớ máy (offline)', seed: 'Dữ liệu khởi tạo (04 HĐ thật)' }[st.loadedFrom] || '—';
   document.getElementById('hdr-right').innerHTML = `
     <div class="src">Nguồn: <b>${src}</b>${st.dirty ? ' · <span class="dot-warn">chưa lưu</span>' : ''}</div>
     ${saveBtn} ${authBtn}
@@ -235,7 +235,7 @@ function renderTools() {
       <div class="dcard pad"><h3>Sao lưu / Di chuyển (JSON)</h3><p class="muted">Tải file JSON bản sao, hoặc nạp lại từ file JSON đã lưu.</p>
         <button class="btn ghost" id="btnExpJson">Tải JSON</button>
         <label class="btn ghost filelbl">Nạp JSON<input type="file" id="impJson" accept="application/json,.json" hidden></label></div>
-      <div class="dcard pad"><h3>Dữ liệu mẫu</h3><p class="muted">Nạp dữ liệu demo (4 gói + ĐH phường) để thử nhanh. Sẽ thay dữ liệu hiện có.</p><button class="btn ghost" id="btnSeed">Nạp dữ liệu mẫu</button></div>
+      <div class="dcard pad"><h3>Khởi tạo 04 HĐ thật</h3><p class="muted">Nạp lại 04 HĐ duy tu 2026–2029 (giá trị HĐ, kế hoạch năm theo bảng giá ký). Thay danh sách HĐ hiện có; giữ nguyên dữ liệu KL vị trí.</p><button class="btn ghost" id="btnSeed">Nạp 04 HĐ thật</button></div>
       <div class="dcard pad"><h3>Đồng bộ Drive</h3><p class="muted">Tải lại bản mới nhất từ Google Drive.</p><button class="btn ghost" id="btnReload" ${D.isSignedIn() ? '' : 'disabled'}>Tải lại từ Drive</button></div>
     </div>`;
 }
@@ -400,7 +400,7 @@ export function bindEvents() {
     });
     if (id === 'btnXlsx') { try { await X.xuatExcel(S.getData(), TODAY()); toast('Đã xuất Excel.', 'ok'); } catch (err) { toast(err.message, 'err'); } }
     if (id === 'btnExpJson') { X.xuatJSON(S.getData()); toast('Đã tải JSON.', 'ok'); }
-    if (id === 'btnSeed') { if (confirm('Nạp dữ liệu mẫu, thay dữ liệu hiện có?')) { await S.loadSeed(); toast('Đã nạp dữ liệu mẫu.', 'ok'); go('dashboard'); } }
+    if (id === 'btnSeed') { if (confirm('Nạp lại 04 HĐ thật, thay danh sách HĐ hiện có (giữ KL vị trí)?')) { await S.loadSeed(); toast('Đã nạp 04 HĐ thật.', 'ok'); go('dashboard'); } }
   });
 
   document.body.addEventListener('change', async (e) => {

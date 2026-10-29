@@ -346,3 +346,7 @@ th.r,td.r{text-align:right;font-variant-numeric:tabular-nums}
   .kl-sbar{bottom:6px}
   .kl-back{display:block}
 }
+.kl-h3{font-size:14px;margin:6px 0 10px;color:var(--ink2)}
+.kl-bgnone{margin-bottom:14px}
+.kl-imp .kl-tb.tight{margin:6px 0;max-width:520px}
+.kl-tb th.r{text-align:right}

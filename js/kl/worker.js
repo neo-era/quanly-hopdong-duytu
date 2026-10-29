@@ -1,5 +1,5 @@
 // worker.js — Luồng nền đọc file Excel (file bảng giá 10 MB mất ~20–30 giây, không được làm treo giao diện).
-import { parsePLWorkbook, parseHMCatalog, boSungTuSheetCon, findSubsetSheets } from './parse.js';
+import { parsePLWorkbook, parseHMCatalog, boSungTuSheetCon, findSubsetSheets, chonSheetBangGia, parseBangGiaKy } from './parse.js';
 
 let XLSX = null;
 async function lib() {
@@ -17,7 +17,19 @@ self.onmessage = async (e) => {
     say(5, 'Đang nạp thư viện Excel…');
     const X = await lib();
     say(15, `Đang đọc ${name}…`);
-    if (kind === 'hm') {
+    if (kind === 'bg') {
+      // Bảng giá HĐ: đọc danh sách sheet trước, rồi chỉ đọc bản chốt + Gx_11C + Tong hop HM (file 10 MB)
+      const names = X.read(buf, { type: 'array', bookSheets: true }).SheetNames;
+      const chon = chonSheetBangGia(names, name);
+      const need = names.filter((n) => n === chon.sheet || /^G\d+_11C$/i.test(n) || n === 'Tong hop HM');
+      say(30, 'Đang đọc bảng giá hợp đồng…');
+      const wb = X.read(buf, { type: 'array', sheets: need });
+      say(75, 'Đang ghép mã hạng mục…');
+      const res = parseBangGiaKy(X, wb, name);
+      let cat = null;
+      if (wb.Sheets['Tong hop HM']) { try { cat = parseHMCatalog(X, wb); } catch { cat = null; } }
+      self.postMessage({ id, done: true, result: { bg: res, cat } });
+    } else if (kind === 'hm') {
       const wb = X.read(buf, { type: 'array', sheets: ['Tong hop HM', 'G1_11C', 'G2_11C', 'G3_11C', 'G4_11C', 'G5_11C', 'G6_11C'] });
       say(80, 'Đang lập danh mục hạng mục…');
       const cat = parseHMCatalog(X, wb);

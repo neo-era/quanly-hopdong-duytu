@@ -352,3 +352,16 @@ th.r,td.r{text-align:right;font-variant-numeric:tabular-nums}
 .kl-tb th.r{text-align:right}
 .kl-dvtheo{font-size:12.5px;color:var(--ink2);background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin-bottom:10px}
 .kl-hmc .h .kl-chip{font-size:10px;padding:1px 6px;margin-left:4px;vertical-align:middle}
+/* Bộ chọn nhiều mã HM */
+.kl-pick{border:1px solid var(--amber);border-radius:12px;margin-top:10px;background:var(--panel);overflow:hidden}
+.kl-pick-bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px;border-bottom:1px solid var(--line2)}
+.kl-pick-bar .kl-in{flex:1;min-width:200px}
+.kl-pick-list{max-height:min(46vh,360px);overflow:auto}
+.kl-pick-it{display:flex;gap:10px;align-items:flex-start;padding:9px 12px;border-bottom:1px solid var(--line2);cursor:pointer;min-height:44px;font-size:13px}
+.kl-pick-it:hover{background:var(--hover)}
+.kl-pick-it input{width:18px;height:18px;margin-top:2px;accent-color:var(--amber);flex:none}
+.kl-pick-it .t{color:var(--ink2)}
+.kl-pick-it.co{opacity:.55;cursor:default}
+.kl-pick-it:has(input:checked){background:var(--sel)}
+.kl-pick-f{display:flex;gap:8px;align-items:center;padding:10px;border-top:1px solid var(--line2);position:sticky;bottom:0;background:var(--panel)}
+.kl-pick-f [data-pn]{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

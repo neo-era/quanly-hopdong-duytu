@@ -3,6 +3,7 @@ import * as C from './calc.js';
 import * as S from './store.js';
 import * as D from './drive.js';
 import * as X from './export.js';
+import { renderKL } from './kl/ui.js';
 
 const TODAY = () => { // ngày ĐỊA PHƯƠNG (VN UTC+7), không dùng UTC để khỏi lệch hạn buổi sáng
   const d = new Date();
@@ -48,14 +49,23 @@ function renderHeader() {
   const src = { drive: 'Drive', cache: 'Bộ nhớ máy (offline)', seed: 'Dữ liệu mẫu' }[st.loadedFrom] || '—';
   document.getElementById('hdr-right').innerHTML = `
     <div class="src">Nguồn: <b>${src}</b>${st.dirty ? ' · <span class="dot-warn">chưa lưu</span>' : ''}</div>
-    ${saveBtn} ${authBtn}`;
+    ${saveBtn} ${authBtn}
+    <button class="theme-t" id="btnTheme" aria-label="Đổi giao diện sáng/tối" title="Đổi giao diện sáng/tối">${document.documentElement.dataset.theme === 'light' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: light)').matches) ? '☾' : '☀'}</button>`;
+  document.getElementById('btnTheme').onclick = () => {
+    const isLight = document.documentElement.dataset.theme === 'light' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: light)').matches);
+    const next = isLight ? 'dark' : 'light';
+    document.documentElement.dataset.theme = next;
+    try { localStorage.setItem('theme', next); } catch {}
+    document.querySelector('meta[name=theme-color]')?.setAttribute('content', next === 'light' ? '#ffffff' : '#0a0f16');
+    renderHeader();
+  };
 }
 
 // ---------- Nav ----------
 function renderNav() {
   const n = document.getElementById('nav');
   const item = (name, label) => `<button class="navbtn ${route.name === name ? 'on' : ''}" data-go="${name}">${label}</button>`;
-  n.innerHTML = item('dashboard', '⚡ Bảng trực') + item('contracts', '▦ Hợp đồng') + item('tools', '⚙ Công cụ');
+  n.innerHTML = item('dashboard', '⚡ Bảng trực') + item('contracts', '▦ Hợp đồng') + item('klvt', '▤ KL vị trí') + item('tools', '⚙ Công cụ');
 }
 
 // ---------- Dashboard ----------
@@ -233,10 +243,12 @@ function renderTools() {
 // ---------- Render chính ----------
 export function render() {
   renderHeader(); renderNav();
+  app().classList.toggle('wide', route.name === 'klvt');
   if (route.name === 'dashboard') renderDashboard();
   else if (route.name === 'contracts') renderContracts();
   else if (route.name === 'detail') renderDetail(route.id);
   else if (route.name === 'tools') renderTools();
+  else if (route.name === 'klvt') renderKL(app(), { getData: S.getData, mutate: S.mutate, toast, render });
 }
 
 // ---------- Modal form ----------

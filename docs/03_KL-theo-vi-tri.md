@@ -41,7 +41,7 @@ Chung: dòng 1 "Phụ lục …", dòng 2 "DUY TRÌ HỆ THỐNG CHIẾU SÁNG �
 
 ## Tiêu chí ĐẠT (đo được)
 1. Nhập 3 file trình Sở thật (Dot2-20.10, dot_4__5, TH SXD-(D5)): số vị trí và tổng KL từng phụ lục **khớp đúng** ô TỔNG CỘNG của file; số nhóm phường khớp.
-2. Nhập file bảng giá HĐ thật: 1.111 mã; KL HĐ năm của một mã mẫu khớp ô trong "Tong hop HM" (vd HM021 G1-2026 = 160.769).
+2. Nhập file bảng giá HĐ thật: đủ mọi mã có trong sheet "Tong hop HM" (thực tế 1.102 mã, gồm cả mục KV2 Cần Giờ `_cg`); KL HĐ năm của một mã mẫu khớp ô trong "Tong hop HM" (vd HM021 G1-2026 = 160.769).
 3. Xuất → mở bằng Excel/LibreOffice: tiêu đề + cột giống file gốc; công thức tính ra đúng tổng; **nhập lại file vừa xuất ra đúng y dữ liệu** (vòng tròn xuất–nhập).
 4. Đối chiếu: với dữ liệu mẫu có đáp án tính tay, 4 cột số đúng; vượt HĐ tô đỏ.
 5. Đánh dấu hàng loạt 50 vị trí "Đã thực hiện" → cột "đã thực hiện" tăng đúng.

@@ -271,7 +271,8 @@ function renderMau(el) {
       <td class="r"><input class="kl-in n r" type="number" step="any" min="0" value="${esc(m.heSo)}" data-mrow="${i}" data-mk="heSo" aria-label="Hệ số"></td>
       <td><button class="ic del" data-mdel="${i}" aria-label="Xoá dòng">🗑</button></td></tr>`).join('') || '<tr><td colspan="5" class="empty">Chưa có dòng nào.</td></tr>'}
     </tbody></table></div>
-    <div class="kl-row"><button class="btn ghost" data-kl="mauThem">+ Thêm mã HM</button>
+    <div data-mpicker></div>
+    <div class="kl-row"><button class="btn ghost" data-kl="mauPick">+ Chọn mã HM (chọn nhiều)</button><button class="btn ghost" data-kl="mauThem">+ Dòng trống</button>
       <button class="btn amber" data-kl="mauAp">Áp mẫu cho vị trí ${esc(K.LOAI_TEN[L])}</button></div>
     ${!names.length ? '<p class="muted">Chưa nhập bảng giá HĐ nên chưa tra được tên hạng mục — vẫn khai được mã.</p>' : ''}
   </div>`;
@@ -362,6 +363,11 @@ async function onClick(e) {
     case 'danhDau': return danhDau();
     case 'boTH': { const n = ui.sel.size; await api.mutate(() => K.danhDauThucHien(S, [...ui.sel], '', 'chua')); ui.sel.clear(); api.toast(`Đã đặt lại ${n} vị trí về "Chưa làm".`, 'ok'); return rerender(); }
     case 'ganMau': return ganMau();
+    case 'mauPick': {
+      const host = document.querySelector('[data-mpicker]'); if (!host) return;
+      return hmPicker(host, S, { daCo: new Set((S.mau[ui.mauLoai] || []).map((m) => m.ma).filter(Boolean)),
+        onAdd: async (ds) => { await api.mutate(() => { const L = (S.mau[ui.mauLoai] ||= []); ds.forEach((ma) => L.push({ ma, heSo: 1 })); }); api.toast(`Đã thêm ${ds.length} mã vào mẫu.`, 'ok'); rerender(); } });
+    }
     case 'mauThem': await api.mutate(() => (S.mau[ui.mauLoai] ||= []).push({ ma: '', heSo: 1 })); return rerender();
     case 'mauAp': {
       if (!(S.mau[ui.mauLoai] || []).filter((m) => m.ma).length) return api.toast('Mẫu đang trống — thêm mã HM trước.', 'err');
@@ -730,6 +736,41 @@ async function ganMau() {
   rerender();
 }
 
+// ---- Bộ chọn nhiều mã HM (tìm theo mã / tên, không dấu cũng được) ----
+const khongDau = (x) => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/gi, 'd').toLowerCase();
+function hmPicker(host, S, { goi = '', daCo = new Set(), onAdd, onClose } = {}) {
+  const all = Object.entries(S.catalog).map(([ma, it]) => ({ ma, it, key: khongDau(ma + ' ' + it.ten), coGoi: !!(goi && it.goi?.[goi] && Object.keys(it.goi[goi].kl || {}).length) }));
+  const chon = new Set();
+  let chiGoi = !!goi && all.some((x) => x.coGoi);
+  host.innerHTML = `<div class="kl-pick" role="group" aria-label="Chọn mã hạng mục">
+    <div class="kl-pick-bar"><input class="kl-in" type="search" data-pq placeholder="Tìm mã hoặc tên hạng mục, vd: đồng hồ" aria-label="Tìm hạng mục">
+      ${goi ? `<label class="kl-chk"><input type="checkbox" data-pg ${chiGoi ? 'checked' : ''}> Chỉ mã có trong HĐ ${goiTen(goi)}</label>` : ''}</div>
+    <div class="kl-pick-list" data-pl role="listbox" aria-multiselectable="true"></div>
+    <div class="kl-pick-f"><span data-pn class="kl-sub">Chưa chọn mã nào</span><button class="btn ghost sm" data-pclose>Đóng</button><button class="btn amber sm" data-padd disabled>Thêm</button></div></div>`;
+  const q = host.querySelector('[data-pq]'), list = host.querySelector('[data-pl]'), btn = host.querySelector('[data-padd]'), n = host.querySelector('[data-pn]');
+  const capNhat = () => { n.textContent = chon.size ? `Đã chọn ${chon.size} mã: ${[...chon].slice(0, 6).join(', ')}${chon.size > 6 ? '…' : ''}` : 'Chưa chọn mã nào'; btn.disabled = !chon.size; btn.textContent = chon.size ? `Thêm ${chon.size} mã` : 'Thêm'; };
+  const ve = () => {
+    const tu = khongDau(q.value).split(/\s+/).filter(Boolean);
+    const cum = tu.join(' ');
+    // Khớp cả cụm ("dong ho") lên trước, khớp rời từng chữ xuống sau
+    const kq = all.filter((x) => (!chiGoi || x.coGoi) && tu.every((t) => x.key.includes(t)))
+      .sort((a, b) => (cum ? (b.key.includes(cum) - a.key.includes(cum)) : 0));
+    const hien = kq.slice(0, 300);
+    list.innerHTML = hien.map((x) => { const co = daCo.has(x.ma);
+      return `<label class="kl-pick-it ${co ? 'co' : ''}"><input type="checkbox" value="${esc(x.ma)}" ${chon.has(x.ma) ? 'checked' : ''} ${co ? 'disabled' : ''}>
+        <span><b class="n">${esc(x.ma)}</b>${x.it.nhom ? ` <span class="kl-chip">${esc(x.it.nhom)}</span>` : ''}${co ? ' <span class="kl-sub">· đã có</span>' : ''}<br><span class="t">${esc(x.it.ten)}</span> <span class="kl-sub">${esc(x.it.dvt || '')}</span></span></label>`; }).join('')
+      + (kq.length > hien.length ? `<div class="kl-sub" style="padding:8px">Còn ${fmt(kq.length - hien.length, 0)} mã nữa — gõ thêm chữ để lọc.</div>` : '')
+      + (!kq.length ? '<div class="empty">Không có mã khớp.</div>' : '');
+  };
+  let tm = 0; q.oninput = () => { clearTimeout(tm); tm = setTimeout(ve, 120); };
+  q.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); const f = list.querySelector('input:not(:disabled)'); if (f) { f.checked = !f.checked; f.dispatchEvent(new Event('change', { bubbles: true })); } } };
+  list.onchange = (e) => { const c = e.target.closest('input[type=checkbox]'); if (!c) return; c.checked ? chon.add(c.value) : chon.delete(c.value); capNhat(); };
+  const pg = host.querySelector('[data-pg]'); if (pg) pg.onchange = () => { chiGoi = pg.checked; ve(); };
+  btn.onclick = () => { const ds = [...chon]; chon.clear(); capNhat(); ds.forEach((m) => daCo.add(m)); onAdd?.(ds); ve(); q.focus(); };
+  host.querySelector('[data-pclose]').onclick = () => { host.innerHTML = ''; onClose?.(); };
+  ve(); capNhat(); setTimeout(() => q.focus(), 0);
+}
+
 // ---- Sửa chi tiết 1 vị trí ----
 function openViTri(id) {
   const S = st();
@@ -745,7 +786,8 @@ function openViTri(id) {
     <div class="kl-vinfo"><span>${esc(K.LOAI_TEN[pl?.loai])}</span><span>${esc(v.phuong)} · ${esc(v.tuyen)}</span><span>KL ${fmt(v.kl)} ${esc(PL_TEMPLATES[pl?.loai]?.dvt || '')} · ${esc(goiTen(v.goi))}${v.donVi ? ' · ' + esc(v.donVi) : ''}</span>${v.namLD ? `<span>Năm lắp đặt ${esc(v.namLD)}</span>` : ''}${v.ghiChu ? `<span>${esc(v.ghiChu)}</span>` : ''}</div>
     <datalist id="klHM2">${Object.entries(S.catalog).slice(0, 2500).map(([m, it]) => `<option value="${esc(m)}">${esc(it.ten)}</option>`).join('')}</datalist>
     <div class="tablewrap"><table class="kl-tb tight"><thead><tr><th>Mã HM · hạng mục</th><th class="r">KL kế hoạch</th><th class="r">KL thực hiện</th><th></th></tr></thead><tbody data-lines>${lines.map(row).join('')}</tbody></table></div>
-    <button class="btn ghost sm" data-ladd style="margin-top:8px">+ Thêm mã HM</button>
+    <div class="kl-row" style="margin-top:8px"><button class="btn ghost sm" data-lpick>+ Chọn mã HM (chọn nhiều)</button><button class="btn ghost sm" data-ladd>+ Dòng trống</button></div>
+    <div data-picker></div>
     <div class="kl-impf" style="margin-top:12px">
       <label class="fld"><span>Gói</span><select data-vg><option value="">—</option>${goiList(S, v.goi).map((g) => `<option value="${g}" ${v.goi === g ? 'selected' : ''}>${goiTen(g)}</option>`).join('')}</select></label>
       <label class="fld"><span>Trạng thái</span><select data-vs>${[['chua', 'Chưa làm'], ['dang', 'Đang làm'], ['da', 'Đã thực hiện']].map(([k, t]) => `<option value="${k}" ${v.trangThai === k ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
@@ -756,6 +798,10 @@ function openViTri(id) {
       const tb = el.querySelector('[data-lines]');
       const read = () => [...tb.querySelectorAll('tr')].map((tr) => ({ ma: tr.querySelector('[data-lk="ma"]').value.trim().toUpperCase(), kl: +tr.querySelector('[data-lk="kl"]').value || 0, th: tr.querySelector('[data-lk="th"]').value }));
       el.querySelector('[data-ladd]').onclick = () => { const cur = read(); cur.push({ ma: '', kl: 1, th: '' }); tb.innerHTML = cur.map(row).join(''); };
+      el.querySelector('[data-lpick]').onclick = () => hmPicker(el.querySelector('[data-picker]'), S, {
+        goi: el.querySelector('[data-vg]').value || v.goi || '', daCo: new Set(read().map((c) => c.ma).filter(Boolean)),
+        onAdd: (ds) => { const cur = read().filter((c) => c.ma || c.kl !== 1); ds.forEach((ma) => cur.push({ ma, kl: 1, th: '' })); tb.innerHTML = cur.map(row).join(''); api.toast(`Đã thêm ${ds.length} mã — nhập KL cho từng mã.`, 'ok'); },
+      });
       tb.onclick = (e) => { const x = e.target.closest('[data-lx]'); if (!x) return; const cur = read(); cur.splice(+x.dataset.lx, 1); tb.innerHTML = cur.map(row).join(''); };
       el.querySelector('[data-ap]').onclick = async () => {
         const raw = read().filter((c) => c.ma);

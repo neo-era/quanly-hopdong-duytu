@@ -389,9 +389,11 @@ export function parseBBNT(XLSX, wb) {
     const iThang = f1(/tháng \d+ năm \d{4}/i);
     if (iThang < 0) continue;
     const mt = h1[iThang].match(/tháng (\d+) năm (\d{4})/i);
-    const c = { ma: h1.findIndex((t) => /^work_item_cs_id/.test(t)), ten: h1.findIndex((t) => /^Hạng mục/i.test(t)), dvt: f1(/^Đơn vị tính/i),
+    const iTen = h1.map((t, i) => [t, i]).filter(([t]) => /^Hạng mục/i.test(t));
+    const iMa = [...h1.keys(), ...h2.keys()].find((i) => /^work_item_cs_id/.test(h1[i] || '') || /^work_item_cs_id/.test(h2[i] || ''));
+    const c = { ma: iMa === undefined ? -1 : iMa, ten: (iTen.find(([t]) => !/\btheo\b/i.test(t)) || iTen[0] || [, -1])[1], dvt: f1(/^Đơn vị tính/i),
       klHD: f1(/^Khối lượng/i), lkTruoc: f1(/kỳ trước/i), th: f2(/^Thực hiện$/i), nt: f2(/^Nghiệm thu$/i), lk: f1(/đến hết kỳ này/i), dg: f1(/^Đơn giá/i) };
-    c.klSap = f2(/^Công ty CP Chiếu sáng/i); if (c.klSap > c.lkTruoc) c.klSap = -1;
+    c.klSap = f2(/^Công ty (CP|Cổ phần) Chiếu sáng/i); if (c.klSap > c.lkTruoc) c.klSap = -1;
     if (c.dg < 0) c.dg = f2(/^ĐG$/);
     c.gt = f2(/^(Giá trị tháng|thành tiền Tháng)/i);
     if (c.nt < 0 || c.lk < 0 || c.lkTruoc < 0) continue;

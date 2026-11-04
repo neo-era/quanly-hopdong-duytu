@@ -36,6 +36,7 @@ export function renderKL(root, a) {
       <div class="kl-acts">
         <button class="btn ghost sm" data-kl="nhapHM">⤓ Bảng giá HĐ</button>
         <button class="btn ghost sm" data-kl="nhapPL">⤓ Nhập phụ lục</button>
+        <button class="btn ghost sm" data-kl="nhapNT" title="Biên bản nghiệm thu khối lượng tháng (BBNT)">⤓ Biên bản NT</button>
         <button class="btn ghost sm" data-kl="nhapDV" title="Biểu KL theo Mã gói thầu + Mã HM của đơn vị (G101TT, G201NA…)">⤓ Biểu KL đơn vị</button>
         <button class="btn ghost sm" data-kl="nhapTH" ${nVT ? '' : 'disabled'}>⤓ Nhập đã thực hiện</button>
         <button class="btn amber sm" data-kl="xuat" ${S.phuLuc.length ? '' : 'disabled'}>⇪ Xuất Excel trình Sở</button>
@@ -48,7 +49,7 @@ export function renderKL(root, a) {
     <div class="kl-view" id="klView"></div>
   </div>`;
   const v = root.querySelector('#klView');
-  if (!S.phuLuc.length && ui.tab !== 'mau' && ui.tab !== 'phuluc' && !(ui.tab === 'doichieu' && (S.bieuDV || []).length)) v.innerHTML = emptyHTML(S);
+  if (!S.phuLuc.length && ui.tab !== 'mau' && ui.tab !== 'phuluc' && !(ui.tab === 'doichieu' && ((S.bieuDV || []).length || (S.nghiemThu || []).length))) v.innerHTML = emptyHTML(S);
   else if (ui.tab === 'vitri') renderViTri(v);
   else if (ui.tab === 'doichieu') renderDoiChieu(v);
   else if (ui.tab === 'mau') renderMau(v);
@@ -167,8 +168,9 @@ function focusHTML(v) {
 function dcOptions() {
   const S = st();
   const bdv = S.bieuDV || [];
-  const goi = [...new Set([...S.viTri.map((v) => v.goi), ...bdv.flatMap((b) => b.maGoi.map((m) => K.goiCuaMaGoiThau(S, m)))].filter(Boolean))].sort();
-  const nam = [...new Set([...S.phuLuc.map((p) => +p.namKH), ...bdv.flatMap((b) => b.nam.map(Number))].filter(Boolean))].sort();
+  const nts = S.nghiemThu || [];
+  const goi = [...new Set([...S.viTri.map((v) => v.goi), ...bdv.flatMap((b) => b.maGoi.map((m) => K.goiCuaMaGoiThau(S, m))), ...nts.map((n) => n.goi)].filter(Boolean))].sort();
+  const nam = [...new Set([...S.phuLuc.map((p) => +p.namKH), ...bdv.flatMap((b) => b.nam.map(Number)), ...nts.map((n) => n.nam)].filter(Boolean))].sort();
   if (!ui.dc.goi || !goi.includes(ui.dc.goi)) {
     const dem = (g) => S.viTri.filter((v) => v.goi === g && (v.chiTiet || []).length).length * 1e6 + S.viTri.filter((v) => v.goi === g).length;
     ui.dc.goi = [...goi].sort((a, b) => dem(b) - dem(a))[0] || '';
@@ -203,7 +205,7 @@ function renderDoiChieu(el) {
       <div class="h"><b class="n">${esc(r.ma)}${r.nhom ? ` <span class="kl-chip">${esc(r.nhom)}</span>` : ''}</b>${r.vuotDV ? `<span class="pill red mini">KH đơn vị vượt ${fmt(r.khDV - r.hd)}</span>` : ''}${r.khongCoTrongHD ? '<span class="pill red mini">Không có trong HĐ</span>' : r.vuot ? `<span class="pill red mini">Vượt ${fmt(r.kh - r.hd)}</span>` : `<span class="pill grn mini">Còn ${fmt(r.hdConLai)}</span>`}</div>
       <div class="nm">${esc(r.ten || '—')}${r.dvt ? ' · ' + esc(r.dvt) : ''}</div>
       <div class="kl-stk" aria-hidden="true"><i class="kh" style="width:${(r.kh / mx) * 100}%"></i><i class="th" style="width:${(r.th / mx) * 100}%"></i><i class="mk" style="left:${(r.hd / mx) * 100}%"></i></div>
-      <div class="leg"><span>HĐ <b class="n">${fmt(r.hd)}</b></span><span>KH <b class="n">${fmt(r.kh)}</b></span><span>Đã TH <b class="n">${fmt(r.th)}</b></span><span>KH còn <b class="n">${fmt(r.khConLai)}</b></span>${r.khDV !== null && r.khDV !== undefined ? `<span>KH đơn vị <b class="n">${fmt(r.khDV)}</b></span>` : ''}</div></button>`;
+      <div class="leg"><span>HĐ <b class="n">${fmt(r.hd)}</b></span><span>KH <b class="n">${fmt(r.kh)}</b></span><span>Đã TH <b class="n">${fmt(r.th)}</b></span><span>KH còn <b class="n">${fmt(r.khConLai)}</b></span>${r.ntLK !== null && r.ntLK !== undefined ? `<span>NT lũy kế <b class="n">${fmt(r.ntLK)}</b></span>` : ''}${r.khDV !== null && r.khDV !== undefined ? `<span>KH đơn vị <b class="n">${fmt(r.khDV)}</b></span>` : ''}</div></button>`;
   };
   const sel = rows.find((r) => r.ma === ui.dc.ma);
   el.innerHTML = `
@@ -224,6 +226,7 @@ function renderDoiChieu(el) {
       <div class="k"><span>Vượt KL HĐ</span><b class="n" style="color:var(--red)">${fmt(d.soVuot, 0)}</b></div>
       <div class="k"><span>Vị trí đã thực hiện</span><b class="n">${fmt(d.soVTDaTH, 0)}<small> / ${fmt(d.soVT, 0)}</small></b></div>
       <div class="k"><span>Giá trị KH theo đơn giá HĐ</span><b class="n">${tien(d.tienKH)}</b></div>
+      ${d.bbnt ? `<div class="k"><span>Nghiệm thu lũy kế (BBNT T${d.bbnt.thang})</span><b class="n">${tien(d.bbnt.tienLK)}</b></div>` : ''}
       ${d.coBieuDV ? `<div class="k"><span>KH theo biểu đơn vị${d.soVuotDV ? ' · vượt HĐ' : ''}</span><b class="n">${tien(d.tienDV)}${d.soVuotDV ? ` <small style="color:var(--red)">${fmt(d.soVuotDV, 0)} mã vượt</small>` : ''}</b></div>` : ''}
       <div class="k"><span>Chưa gắn HM${khongGoi ? ' · chưa có gói' : ''}</span><b class="n" style="color:${d.chuaGanHM || khongGoi ? 'var(--org)' : 'inherit'}">${fmt(d.chuaGanHM, 0)}${khongGoi ? ` · ${fmt(khongGoi, 0)}` : ''} vị trí</b></div>
     </div>
@@ -288,6 +291,12 @@ function bangGiaHTML(S) {
       <label class="fld"><span>Mã gói thầu</span><input class="kl-in n" data-mgt="${g}" value="${esc(b.maGoiThau || '')}" placeholder="vd G101TT"></label>
       <div class="kl-plnum"><span><b class="n">${fmt(b.rows.length, 0)}</b> dòng</span><span>Giá trị <b class="n">${tien(sum(b.tong))}</b></span>${b.lienDanh ? `<span>Sapulico <b class="n">${tien(sum(b.tongSap))}</b></span>` : ''}</div></div>`; }).join('')}</div>`;
 }
+function bbntHTML(S) {
+  const L = (S.nghiemThu || []).slice().sort((a, b) => a.goi.localeCompare(b.goi) || a.nam - b.nam || a.thang - b.thang);
+  if (!L.length) return '<p class="muted">Chưa có biên bản nào. Bấm "⤓ Biên bản NT" để nhập file BBNT tháng (app tự nhận gói, tháng, ghép mã HM).</p>';
+  return `<div class="tablewrap"><table class="kl-tb tight"><thead><tr><th>Gói</th><th>Tháng</th><th>File › sheet</th><th class="r">Số mã có NT</th><th class="r">Giá trị NT tháng</th><th></th></tr></thead><tbody>
+    ${L.map((n) => `<tr><td>${goiTen(n.goi)}</td><td>T${n.thang}/${n.nam}</td><td class="kl-sub">${esc(n.file)} › ${esc(n.sheet)}</td><td class="r n">${fmt(n.rows.filter((r) => r[1]).length, 0)}</td><td class="r n">${fmt(n.gt, 0)}</td><td><button class="ic del" data-ntdel="${n.id}" aria-label="Xoá biên bản">🗑</button></td></tr>`).join('')}</tbody></table></div>`;
+}
 function bieuDVHTML(S) {
   const L = S.bieuDV || [];
   if (!L.length) return '<p class="muted">Chưa có biểu nào. Bấm "⤓ Biểu KL đơn vị" để nhập file dạng G101TT / G201NA / G301TB (cột Mã gói thầu, Mã HM, Năm, Nhóm HM…).</p>';
@@ -298,7 +307,7 @@ function bieuDVHTML(S) {
 }
 function renderPhuLuc(el) {
   const S = st();
-  el.innerHTML = `<div class="kl-pad"><h3 class="kl-h3">Bảng giá ký hợp đồng</h3>${bangGiaHTML(S)}<h3 class="kl-h3">Biểu KL đơn vị theo mã gói thầu</h3>${bieuDVHTML(S)}<h3 class="kl-h3">Phụ lục trình Sở đã nhập</h3>${S.phuLuc.length ? '' : '<p class="muted">Chưa có phụ lục nào.</p>'}<div class="kl-plgrid">
+  el.innerHTML = `<div class="kl-pad"><h3 class="kl-h3">Bảng giá ký hợp đồng</h3>${bangGiaHTML(S)}<h3 class="kl-h3">Biên bản nghiệm thu đã nhập</h3>${bbntHTML(S)}<h3 class="kl-h3">Biểu KL đơn vị theo mã gói thầu</h3>${bieuDVHTML(S)}<h3 class="kl-h3">Phụ lục trình Sở đã nhập</h3>${S.phuLuc.length ? '' : '<p class="muted">Chưa có phụ lục nào.</p>'}<div class="kl-plgrid">
     ${S.phuLuc.map((p) => {
       const vts = S.viTri.filter((v) => v.plId === p.id);
       const da = vts.filter((v) => v.trangThai === 'da').length;
@@ -341,6 +350,11 @@ async function onClick(e) {
   if (t.dataset.mau) { ui.mauLoai = t.dataset.mau; return rerender(); }
   if (t.dataset.mdel !== undefined) { await api.mutate(() => S.mau[ui.mauLoai].splice(+t.dataset.mdel, 1)); return rerender(); }
   if (t.dataset.plxem) { ui.tab = 'vitri'; ui.f = { ...ui.f, plId: t.dataset.plxem }; return rerender(); }
+  if (t.dataset.ntdel) {
+    const n = (S.nghiemThu || []).find((x) => x.id === t.dataset.ntdel);
+    if (n && await confirmBox(`Xoá biên bản ${goiTen(n.goi)} T${n.thang}/${n.nam} khỏi app? (kỳ nghiệm thu đã ghi vào hợp đồng vẫn giữ — sửa ở màn Hợp đồng)`, 'Xoá')) { await api.mutate(() => { S.nghiemThu = S.nghiemThu.filter((x) => x.id !== n.id); }); rerender(); }
+    return;
+  }
   if (t.dataset.bdvdel) {
     const b = (S.bieuDV || []).find((x) => x.id === t.dataset.bdvdel);
     if (b && await confirmBox(`Xoá biểu ${b.file} › ${b.sheet}? (chỉ xoá trong app)`, 'Xoá')) { await api.mutate(() => K.xoaBieuDV(S, b.id)); api.toast('Đã xoá biểu.', 'ok'); rerender(); }
@@ -357,6 +371,7 @@ async function onClick(e) {
     case 'nhapHM': return nhapBangGia();
     case 'nhapTH': return nhapThucHien();
     case 'nhapDV': return nhapBieuDV();
+    case 'nhapNT': return nhapBBNT();
     case 'xuat': return xuatExcel();
     case 'more': ui.limit += PAGE; return rerender();
     case 'boChon': ui.sel.clear(); return rerender();
@@ -545,6 +560,85 @@ async function nhapBangGia() {
         const c0 = chon.find((k) => k.cat); if (c0 && !S.catalogNguon) S.catalogNguon = { file: c0.f.name, ngay: new Date().toISOString() };
       });
       close(); api.toast(`Đã nhập bảng giá ký HĐ ${soGoi} gói${canh.length ? ` · ${canh.length} cảnh báo đơn giá` : ''}.`, canh.length ? 'err' : 'ok'); rerender();
+    }; },
+  });
+}
+
+// ---- Nhập biên bản nghiệm thu tháng ----
+async function nhapBBNT() {
+  const files = await pickFile('.xlsx,.xlsb,.xlsm,.xls', true);
+  if (!files.length) return;
+  const S = st();
+  if (!Object.keys(S.bangGia || {}).length) return api.toast('Cần nhập bảng giá ký HĐ (⤓ Bảng giá HĐ) trước để ghép mã HM cho biên bản.', 'err');
+  const pg = progressModal('Đọc biên bản nghiệm thu');
+  const items = [];
+  for (const [i, f] of files.entries()) {
+    try { const r = await parseFile('nt', f, (p, t) => pg.set(Math.round((i * 100 + p) / files.length), t)); r.forEach((b) => items.push({ f, b })); }
+    catch (err) { items.push({ f, loi: err.message }); }
+  }
+  pg.close();
+  const HD = api.getData().contracts || [];
+  const hdCua = (goi) => HD.find((c) => c.id === 'hd-' + String(goi).toLowerCase()) || HD.find((c) => new RegExp('^Gói\\s*' + String(goi).replace(/^G/, '') + '\\b', 'i').test(c.tenGoi || ''));
+  // ghép + kiểm; mỗi gói+tháng chỉ chọn sẵn 1 sheet (ưu tiên sheet không phải "mẫu")
+  const daChon = new Set();
+  items.sort((a, b) => (/mẫu/i.test(a.b?.sheet || '') - /mẫu/i.test(b.b?.sheet || '')) || ((b.b?.gtThang || 0) - (a.b?.gtThang || 0)));
+  for (const it of items) {
+    if (!it.b) continue;
+    it.gh = K.ghepBBNT(S, it.b);
+    if (!it.gh.ok) continue;
+    it.kt = K.kiemBBNT(S, it.b, it.gh.goi);
+    const k = it.gh.goi + '|' + it.b.nam + '|' + it.b.thang;
+    it.trung = daChon.has(k) || /mẫu/i.test(it.b.sheet);
+    it.chon = !it.trung; if (it.chon) daChon.add(k);
+  }
+  // Tháng bị thiếu: có BBNT tháng trước và sau (trong kho hoặc lượt nhập này) nhưng không có tháng giữa
+  const coThang = new Set([...(S.nghiemThu || []).map((n) => `${n.goi}|${n.nam}|${n.thang}`), ...items.filter((x) => x.chon).map((x) => `${x.gh.goi}|${x.b.nam}|${x.b.thang}`)]);
+  for (const it of items) {
+    if (!it.chon) continue;
+    const truoc = [...coThang].map((k) => k.split('|')).filter(([g, y, t]) => g === it.gh.goi && +y === it.b.nam && +t < it.b.thang).map(([, , t]) => +t);
+    if (truoc.length) { const mx = Math.max(...truoc); if (mx < it.b.thang - 1) it.thieu = Array.from({ length: it.b.thang - 1 - mx }, (_, k) => mx + 1 + k); }
+  }
+  const khop = items.filter((x) => x.gh?.ok), bo = items.filter((x) => x.b && !x.gh?.ok);
+  if (!khop.length) return api.toast('Không có sheet biên bản nào khớp bảng giá ký HĐ đã nhập.', 'err');
+  const ds = (a, t) => a.length ? `<p class="kl-warn">${fmt(a.length, 0)} ${t}: ${esc(a.slice(0, 4).join('; '))}${a.length > 4 ? '…' : ''}</p>` : '';
+  const html = items.map((it, i) => {
+    if (it.loi) return `<div class="kl-imp bad"><b>${esc(it.f.name)}</b><p>${esc(it.loi)}</p></div>`;
+    if (!it.gh?.ok) return '';
+    const b = it.b, g = it.gh, kt = it.kt, hd = hdCua(g.goi);
+    const daCo = (S.nghiemThu || []).find((n) => n.goi === g.goi && n.nam === b.nam && n.thang === b.thang);
+    return `<div class="kl-imp ${kt.lkSai.length || kt.vuot.length ? 'bad' : ''}">
+      <label class="kl-imph"><input type="checkbox" data-ni="${i}" ${it.chon ? 'checked' : ''}> <b>${goiTen(g.goi)} · T${b.thang}/${b.nam}</b> <span class="kl-sub">${esc(it.f.name)} › ${esc(b.sheet)}</span></label>
+      <div class="kl-impn"><span>${fmt(b.items.length, 0)} hạng mục · ${fmt(b.items.filter((x) => x.nt).length, 0)} mã có NT</span><span>Giá trị NT tháng <b class="n">${fmt(b.gtThang, 0)}</b> đ</span>
+        ${!g.lechKL.length && !g.lechDG.length ? '<span class="pill grn mini">✓ tên, KL HĐ, đơn giá khớp bảng giá ký</span>' : ''}
+        ${!kt.lkSai.length && !kt.vuot.length ? '<span class="pill grn mini">✓ lũy kế đúng, không vượt KL HĐ</span>' : ''}
+        ${kt.thangTruoc ? (kt.noiTiep.length ? `<span class="pill red mini">${fmt(kt.noiTiep.length, 0)} mã: kỳ trước ≠ lũy kế T${kt.thangTruoc}${kt.thangTruoc < b.thang - 1 ? ` (thiếu BBNT T${kt.thangTruoc + 1}${kt.thangTruoc + 1 < b.thang - 1 ? '–T' + (b.thang - 1) : ''})` : ''}</span>` : `<span class="pill grn mini">✓ nối tiếp T${kt.thangTruoc}</span>`) : ''}</div>
+      ${it.thieu ? `<p class="kl-warn">⚠ Thiếu biên bản ${it.thieu.map((t) => 'T' + t).join(', ')} của ${goiTen(g.goi)}: lũy kế kỳ trước của biên bản này sẽ không nối được với tháng trước.</p>` : ''}
+      ${it.trung ? '<p class="kl-warn">Trùng gói + tháng với sheet khác (hoặc là sheet mẫu) — mặc định bỏ chọn.</p>' : ''}
+      ${b.nhanCotGT && /tháng \d+/i.test(b.nhanCotGT) && +b.nhanCotGT.match(/tháng (\d+)/i)[1] !== b.thang ? `<p class="kl-warn">Nhãn cột giá trị ghi "${esc(b.nhanCotGT)}" nhưng biên bản là tháng ${b.thang}.</p>` : ''}
+      ${ds(g.lechKL, 'lệch KL HĐ')}${ds(g.lechDG, 'lệch đơn giá')}${ds(kt.lkSai, 'dòng lũy kế ≠ kỳ trước + NT')}${ds(kt.vuot, 'mã lũy kế vượt KL HĐ')}${ds(kt.thKhacNT, 'mã thực hiện ≠ nghiệm thu')}
+      ${daCo ? `<p class="muted">Đã có BBNT tháng này (${esc(daCo.file)}) — sẽ thay.</p>` : ''}
+      <label class="kl-chk"><input type="checkbox" data-nk="${i}" ${hd ? 'checked' : 'disabled'}> Ghi giá trị NT tháng vào kỳ ${b.nam}-${String(b.thang).padStart(2, '0')} của HĐ ${hd ? esc(hd.tenGoi.slice(0, 50)) : '(không tìm thấy HĐ của gói này)'}</label></div>`;
+  }).join('') + (bo.length ? `<p class="muted">${fmt(bo.length, 0)} sheet khác không khớp bảng giá ký HĐ nào (vd biên bản HĐ cũ) — bỏ qua: ${esc(bo.slice(0, 8).map((x) => x.b.sheet).join(', '))}${bo.length > 8 ? '…' : ''}</p>` : '');
+  openModal('Xem trước — biên bản nghiệm thu', html + `<div class="sheet-f"><button class="btn ghost" data-x>Huỷ</button><button class="btn amber" data-ap>Nhập</button></div>`, {
+    wide: true,
+    onMount: (el, close) => { el.querySelector('[data-ap]').onclick = async () => {
+      let n = 0, nk = 0;
+      const chon = items.map((it, i) => [it, i]).filter(([it, i]) => it.gh?.ok && el.querySelector(`[data-ni="${i}"]`)?.checked).sort(([a], [b]) => a.b.thang - b.b.thang);
+      await api.mutate((data) => {
+        for (const [it, i] of chon) {
+          K.luuBBNT(S, it.b, it.gh.goi, it.f.name); n++;
+          const hd = hdCua(it.gh.goi);
+          if (hd && el.querySelector(`[data-nk="${i}"]`)?.checked) {
+            const ky = `${it.b.nam}-${String(it.b.thang).padStart(2, '0')}`;
+            hd.kyThanhToan ||= [];
+            const k = hd.kyThanhToan.find((x) => x.ky === ky);
+            const gt = Math.round(it.b.gtThang);
+            if (k) k.giaTriNT = gt; else hd.kyThanhToan.push({ id: 'kt-' + Date.now().toString(36) + n, ky, mocHoSo: '', giaTriNT: gt, daThanhToan: 0 });
+            hd.kyThanhToan.sort((a, b) => String(a.ky).localeCompare(String(b.ky))); nk++;
+          }
+        }
+      });
+      close(); api.toast(`Đã nhập ${n} biên bản${nk ? ` · ghi ${nk} kỳ nghiệm thu vào hợp đồng` : ''}.`, 'ok'); ui.tab = 'doichieu'; rerender();
     }; },
   });
 }

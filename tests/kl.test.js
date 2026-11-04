@@ -288,6 +288,31 @@ if (BG && MA && fs.existsSync(MA)) {
   eq([d.maGoiThau, d.coBieuDV, co.length > 0, co.every((r) => r.hd === st.catalog[r.ma].goi.G1.kl[2026])], ['G101TT', true, true, true], 'Đối chiếu G1-2026 có cột KH đơn vị từ biểu G101TT, KL HĐ theo bảng giá ký');
   eq(Math.round(d.tienDV), 7549420089, 'Giá trị KH đơn vị = 7.549.420.089 đ (khớp dòng NĂM 2026 cột dự kiến của file)');
 } else { skip++; console.log('… bỏ qua test mã gói thầu (chưa đặt KL_MA)'); }
+
+// ---- Biên bản nghiệm thu tháng (file thật, KL_BG chứa BBNT G1 + G2) ----
+if (BG && fs.existsSync(BG) && fs.readdirSync(BG).some((f) => /BIEN_B_N_NT/.test(f))) {
+  const files = fs.readdirSync(BG); const tim = (re) => path.join(BG, files.find((f) => re.test(f)));
+  const docBG2 = (re, nm) => { const buf = fs.readFileSync(tim(re)); const names = XLSX.read(buf, { type: 'buffer', bookSheets: true }).SheetNames; const ch = P.chonSheetBangGia(names, nm);
+    return P.parseBangGiaKy(XLSX, XLSX.read(buf, { type: 'buffer', sheets: names.filter((n) => n === ch.sheet || /_11C$/.test(n)) }), nm); };
+  const st = K.emptyState();
+  K.apBangGiaKy(st, docBG2(/G1_Bieu/, 'G1_x.xlsb')); K.apBangGiaKy(st, docBG2(/G2_Bieu/, 'G2_x.xlsb'));
+  const g1 = P.parseBBNT(XLSX, XLSX.read(fs.readFileSync(tim(/BIEN_B_N_NT/)), { type: 'buffer' }));
+  const t = (m) => g1.find((b) => b.sheet === `BBNT G1_T${m}.26`);
+  eq([t(7).thang, t(10).thang, t(10).items.length, Math.round(t(10).gtThang)], [7, 10, 412, 5206585560], 'BBNT G1 T10: 412 hạng mục, giá trị tháng 5.206.585.560 (= dòng NĂM 2026 của file)');
+  for (const m of [7, 8, 9, 10]) { const gh = K.ghepBBNT(st, t(m)); const kt = K.kiemBBNT(st, t(m), 'G1');
+    eq([gh.ok, gh.goi, gh.lechKL.length, gh.lechDG.length, kt.lkSai.length, kt.vuot.length, kt.noiTiep.length], [true, 'G1', 0, 0, 0, 0, 0], `BBNT G1 T${m}: khớp bảng giá ký, lũy kế đúng, nối tiếp tháng trước`);
+    K.luuBBNT(st, t(m), 'G1', 'g1.xlsx'); }
+  const cu = g1.filter((b) => /T\.ĐẦU/.test(b.sheet)).map((b) => K.ghepBBNT(st, b).ok);
+  ok(cu.length > 0 && cu.every((x) => !x), 'Sheet BBNT HĐ cũ (T.ĐẦU) không khớp bảng giá HĐ mới → không nhập nhầm');
+  const d = K.doiChieu(st, 'G1', 2026);
+  eq([d.bbnt.thang, Math.round(d.bbnt.tienLK), d.rows.find((r) => r.ma === 'HM021').ntLK], [10, 19850995669, 104859], 'Đối chiếu G1: lũy kế NT theo BBNT T10 = 19.850.995.669 đ; HM021 lũy kế 104.859');
+  const g2 = (re, sh) => P.parseBBNT(XLSX, XLSX.read(fs.readFileSync(tim(re)), { type: 'buffer' })).find((b) => b.sheet === sh);
+  const b7 = g2(/HC_T7\.26_G2/, 'BBNT T7.26 G2'), b8 = g2(/HC_T8\.26_G2/, 'BBNT T8.26 G2'), b10 = g2(/HC_T10\.26_G2/, 'BBNT T10.26 G2 BC');
+  for (const b of [b7, b8]) { const gh = K.ghepBBNT(st, b); eq([gh.ok, gh.goi, K.kiemBBNT(st, b, 'G2').noiTiep.length], [true, 'G2', 0], `BBNT G2 T${b.thang}: khớp G2, nối tiếp đúng`); K.luuBBNT(st, b, 'G2', 'g2'); }
+  const gh10 = K.ghepBBNT(st, b10); const kt10 = K.kiemBBNT(st, b10, 'G2');
+  eq([gh10.ok, kt10.thangTruoc, kt10.noiTiep.length, b10.nhanCotGT], [true, 8, 125, 'thành tiền Tháng 9'], 'BBNT G2 T10: thiếu T9 → 125 mã lệch nối tiếp với T8; phát hiện nhãn cột "Tháng 9"');
+  eq(Math.round(b10.gtThang), 6116880237, 'BBNT G2 T10: giá trị tháng 6.116.880.237');
+} else { skip++; console.log('… bỏ qua test BBNT (chưa có file)'); }
 const HMF = process.env.KL_HM;
 if (HMF && fs.existsSync(HMF)) {
   const wb = XLSX.read(fs.readFileSync(HMF), { type: 'buffer', sheets: ['Tong hop HM', 'G1_11C', 'G2_11C', 'G3_11C', 'G4_11C'] });

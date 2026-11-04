@@ -139,6 +139,9 @@ export function doiChieu(st, goi, nam, { phan = 'ld' } = {}) {
     const o = dvMap.get(r[1]) || { tong: 0, theo: [] }; o.tong += v; o.theo.push({ id: bd.id, donVi: bd.donVi.join(', ') || bd.file, v }); dvMap.set(r[1], o);
     get(r[1]);
   }
+  const bbnt = bbntMoiNhat(st, goi, nam);
+  const ntMap = new Map((bbnt?.rows || []).map((r) => [r[0], r[2]]));
+  for (const ma of ntMap.keys()) if (ntMap.get(ma)) get(ma);
   const rows = [...acc.values()].map((a) => {
     const it = st.catalog[a.ma];
     const g = it?.goi?.[goi];
@@ -151,6 +154,7 @@ export function doiChieu(st, goi, nam, { phan = 'ld' } = {}) {
       khongCoTrongHD: !it, dg, tienKH: kh * dg, tienTH: th * dg, nhom: it?.nhom || '',
       khDV: dvMap.has(a.ma) ? round(dvMap.get(a.ma).tong) : null, khDVTheo: dvMap.get(a.ma)?.theo || [],
       vuotDV: dvMap.has(a.ma) && dvMap.get(a.ma).tong - hd > 1e-9,
+      ntLK: bbnt ? round(ntMap.get(a.ma) || 0) : null,
     };
   });
   rows.sort((x, y) => (y.vuot - x.vuot) || ((y.vuot ? y.kh - y.hd : 0) - (x.vuot ? x.kh - x.hd : 0)) || x.ma.localeCompare(y.ma, 'vi', { numeric: true }));
@@ -162,6 +166,7 @@ export function doiChieu(st, goi, nam, { phan = 'ld' } = {}) {
     tienKH: rows.reduce((a, r) => a + r.tienKH, 0),
     maGoiThau: maGT, coBieuDV: dvMap.size > 0, soVuotDV: rows.filter((r) => r.vuotDV).length,
     tienDV: rows.reduce((a, r) => a + (r.khDV || 0) * r.dg, 0),
+    bbnt: bbnt ? { thang: bbnt.thang, file: bbnt.file, tienLK: (bbnt.rows || []).reduce((a, r) => a + r[2] * (r[3] || 0), 0) } : null,
   };
 }
 
@@ -321,3 +326,59 @@ export function themBieuDV(st, b, { file = '', chinh = b.chinh } = {}) {
   return rec;
 }
 export function xoaBieuDV(st, id) { st.bieuDV = (st.bieuDV || []).filter((x) => x.id !== id); }
+
+// ================== Biên bản nghiệm thu (BBNT) ==================
+const tenChuan = (x) => String(x || '').normalize('NFC').replace(/\s+/g, ' ').trim().toLowerCase();
+/**
+ * Ghép 1 BBNT với bảng giá ký HĐ đã nhập: thử từng gói có cùng số dòng của năm đó, dòng i ↔ dòng i (cùng tên).
+ * Trả { ok, goi, lech: {ten, kl, dg}, ... } và gắn x.ma cho từng dòng khi ok.
+ */
+export function ghepBBNT(st, b) {
+  let tot = null;
+  for (const [goi, bg] of Object.entries(st.bangGia || {})) {
+    const rs = bg.rows.filter((r) => +r[0] === +b.nam);
+    if (rs.length !== b.items.length) continue;
+    const kq = { ok: true, goi, lechTen: [], lechKL: [], lechDG: [] };
+    for (let i = 0; i < rs.length; i++) {
+      const [, ma, kl, klSap, dg] = rs[i]; const x = b.items[i];
+      if (tenChuan(x.ten) !== tenChuan(st.catalog[ma]?.ten)) { kq.lechTen.push(`dòng ${x.row}: "${x.ten}" ≠ ${ma}`); if (kq.lechTen.length > 20) break; continue; }
+      if (x.ma && x.ma !== ma) kq.lechTen.push(`dòng ${x.row}: mã ${x.ma} ≠ ${ma}`);
+      const klF = x.klSap ?? x.klHD, klK = x.klSap !== null && x.klSap !== undefined ? klSap : kl;
+      if (klF !== null && Math.abs(klF - klK) > 1e-6) kq.lechKL.push(`${ma}: ${klF} ≠ ${klK}`);
+      if (x.dg !== null && Math.abs(x.dg - dg) > 0.5) kq.lechDG.push(`${ma}: ${x.dg} ≠ ${dg}`);
+    }
+    if (kq.lechTen.length) { tot ||= { ...kq, ok: false }; continue; }
+    b.items.forEach((x, i) => { x.maK = rs[i][1]; x.tran = (x.klSap ?? x.klHD) ?? (rs[i][3] || rs[i][2]); });
+    return kq;
+  }
+  return tot || { ok: false, goi: null, lechTen: [], lechKL: [], lechDG: [], loi: 'Không khớp bảng giá ký HĐ của gói nào (số dòng / tên hạng mục khác).' };
+}
+/** Kiểm tra nội bộ + nối tiếp với BBNT tháng trước đã có trong kho. */
+export function kiemBBNT(st, b, goi) {
+  const kq = { lkSai: [], vuot: [], thKhacNT: [], noiTiep: [], thangTruoc: null };
+  for (const x of b.items) {
+    if (Math.abs(x.lkTruoc + x.nt - x.lk) > 1e-6) kq.lkSai.push(`${x.maK || x.stt}: ${x.lkTruoc} + ${x.nt} ≠ ${x.lk}`);
+    if (x.tran !== null && x.tran !== undefined && x.lk - x.tran > 1e-6) kq.vuot.push(`${x.maK}: lũy kế ${x.lk} > HĐ ${x.tran}`);
+    if (x.th !== null && Math.abs(x.th - x.nt) > 1e-6) kq.thKhacNT.push(`${x.maK}: TH ${x.th} ≠ NT ${x.nt}`);
+  }
+  const truoc = (st.nghiemThu || []).filter((n) => n.goi === goi && n.nam === b.nam && n.thang < b.thang).sort((a, c) => c.thang - a.thang)[0];
+  if (truoc) {
+    kq.thangTruoc = truoc.thang;
+    const lkT = new Map(truoc.rows.map((r) => [r[0], r[2]]));
+    for (const x of b.items) { const p = lkT.get(x.maK) || 0; if (Math.abs(p - x.lkTruoc) > 1e-6) kq.noiTiep.push(`${x.maK}: kỳ trước ${x.lkTruoc} ≠ lũy kế T${truoc.thang} ${p}`); }
+  }
+  return kq;
+}
+/** Lưu BBNT (thay bản cũ cùng gói + năm + tháng). rows: [ma, KL nghiệm thu tháng, lũy kế đến hết kỳ, đơn giá]. */
+export function luuBBNT(st, b, goi, file) {
+  st.nghiemThu ||= [];
+  st.nghiemThu = st.nghiemThu.filter((n) => !(n.goi === goi && n.nam === b.nam && n.thang === b.thang));
+  const rec = { id: uid('nt'), goi, nam: b.nam, thang: b.thang, file, sheet: b.sheet, ngay: new Date().toISOString(), gt: b.gtThang,
+    rows: b.items.filter((x) => x.nt || x.lk).map((x) => [x.maK, x.nt, x.lk, x.dg || 0]) };
+  st.nghiemThu.push(rec);
+  return rec;
+}
+/** BBNT mới nhất của gói trong năm (để lấy lũy kế nghiệm thu theo mã HM). */
+export function bbntMoiNhat(st, goi, nam) {
+  return (st.nghiemThu || []).filter((n) => n.goi === goi && n.nam === +nam).sort((a, b) => b.thang - a.thang)[0] || null;
+}

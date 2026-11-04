@@ -79,3 +79,9 @@ Bước 1 doc (file này) → **Chốt UI** (2 phương án màn "Vị trí" + m
 - Nút "⤓ Biểu KL đơn vị": đọc sheet có tiêu đề "Mã gói thầu | Mã Hạng mục công tác | Năm công tác | Nhóm…"; kiểm tra mã/nhóm/đơn giá/KL HĐ với bảng giá ký; chọn cột làm "KH đơn vị" (mặc định cột "dự kiến"); cùng file có nhiều sheet cùng mã gói → chỉ chọn 1 sheet sạch.
 - Đối chiếu HM: lọc theo nhóm HM, hiện mã gói thầu, cột "KH đơn vị", cảnh báo mã HM có KH đơn vị vượt KL HĐ năm.
 - Kết quả thật: biểu CSKVB (G101TT-2026BSV-CSB_v1) 412 mã khớp bảng giá ký; giá trị dự kiến 7.549.420.089 đ; 9 mã vượt KL HĐ Gói 1 năm 2026.
+
+## Bổ sung 04/11/2026 — Biên bản nghiệm thu tháng (BBNT)
+- Nút "⤓ Biên bản NT": đọc mọi sheet dạng BBNT (cột Lũy kế kỳ trước / KL tháng N: Thực hiện–Nghiệm thu / Lũy kế đến hết kỳ / Đơn giá); tự nhận gói bằng cách ghép với bảng giá ký HĐ (đúng số dòng + tên); sheet HĐ cũ, sheet căn cứ/mẫu trống tự bỏ.
+- Kiểm tra: tên/KL HĐ/đơn giá so bảng giá ký; lũy kế = kỳ trước + NT; không vượt KL HĐ; nối tiếp tháng trước; cảnh báo thiếu tháng; nhãn cột sai tháng.
+- Ghi giá trị NT tháng (Σ KL NT × ĐG, đúng số dòng NĂM của BBNT) vào kỳ thanh toán của HĐ tương ứng; Đối chiếu HM hiện "NT lũy kế" theo BBNT mới nhất.
+- Kết quả thật: G1 T7–T10 khớp hoàn toàn, lũy kế 19.850.995.669 đ; G2 T7, T8, T10 khớp, thiếu BBNT T9.

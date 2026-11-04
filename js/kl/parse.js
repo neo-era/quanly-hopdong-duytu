@@ -370,3 +370,47 @@ export function parseBieuMaGoi(XLSX, wb) {
   }
   return out;
 }
+
+// ================== Biên bản nghiệm thu khối lượng tháng (BBNT) ==================
+/**
+ * Đọc mọi sheet dạng BBNT: dòng tiêu đề "Stt | Hạng mục…", cột "Lũy kế … kỳ trước", "Khối lượng tháng N năm YYYY" (Thực hiện / Nghiệm thu),
+ * "Lũy kế … đến hết kỳ này", "Đơn giá"/"ĐG". Giữ nguyên số trong file; không tự suy giá trị.
+ */
+export function parseBBNT(XLSX, wb) {
+  const out = [];
+  for (const sn of wb.SheetNames) {
+    const ws = wb.Sheets[sn]; if (!ws || !ws['!ref']) continue;
+    const off = XLSX.utils.decode_range(ws['!ref']).s.r;
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' });
+    const hi = rows.slice(0, 120).findIndex((r) => /^stt$/i.test(nfc(r[0])) && r.some((x) => /Hạng mục/i.test(nfc(x))));
+    if (hi < 0) continue;
+    const h1 = (rows[hi] || []).map(nfc), h2 = (rows[hi + 1] || []).map(nfc);
+    const f1 = (re) => h1.findIndex((t) => re.test(t)), f2 = (re) => h2.findIndex((t) => re.test(t));
+    const iThang = f1(/tháng \d+ năm \d{4}/i);
+    if (iThang < 0) continue;
+    const mt = h1[iThang].match(/tháng (\d+) năm (\d{4})/i);
+    const c = { ma: h1.findIndex((t) => /^work_item_cs_id/.test(t)), ten: h1.findIndex((t) => /^Hạng mục/i.test(t)), dvt: f1(/^Đơn vị tính/i),
+      klHD: f1(/^Khối lượng/i), lkTruoc: f1(/kỳ trước/i), th: f2(/^Thực hiện$/i), nt: f2(/^Nghiệm thu$/i), lk: f1(/đến hết kỳ này/i), dg: f1(/^Đơn giá/i) };
+    c.klSap = f2(/^Công ty CP Chiếu sáng/i); if (c.klSap > c.lkTruoc) c.klSap = -1;
+    if (c.dg < 0) c.dg = f2(/^ĐG$/);
+    c.gt = f2(/^(Giá trị tháng|thành tiền Tháng)/i);
+    if (c.nt < 0 || c.lk < 0 || c.lkTruoc < 0) continue;
+    const num = (v) => (isNum(v) ? v : null);
+    let y = null, kv = ''; const items = [], namRow = [];
+    for (let i = hi + 2; i < rows.length; i++) {
+      const r = rows[i], a = nfc(r[0]);
+      const txt = r.slice(1, 8).map(nfc).find((x) => x && !/^G\d/.test(x) && isNaN(+x)) || '';
+      const m = txt.match(/^NĂM\s*(\d{4})$/i);
+      if (m) { y = +m[1]; namRow.push({ kv, y, gt: c.gt >= 0 ? num(r[c.gt]) : null, row: i + 1 + off }); continue; }
+      if (/^[A-Z]$/.test(a) && txt) { kv = txt; continue; }
+      if (!isNum(r[0])) continue;
+      items.push({ y, kv, stt: r[0], row: i + 1 + off, ma: c.ma >= 0 ? nfc(r[c.ma]) : '', ten: nfc(r[c.ten]) || nfc(r[1]), dvt: nfc(r[c.dvt]),
+        klHD: num(r[c.klHD]), klSap: c.klSap >= 0 ? num(r[c.klSap]) : null, lkTruoc: num(r[c.lkTruoc]) || 0,
+        th: c.th >= 0 ? num(r[c.th]) : null, nt: num(r[c.nt]) || 0, lk: num(r[c.lk]) || 0, dg: num(r[c.dg]), gt: c.gt >= 0 ? num(r[c.gt]) : null });
+    }
+    if (!items.length || items.every((x) => !x.nt && !x.lk && !x.lkTruoc)) continue; // sheet căn cứ / mẫu trống
+    out.push({ sheet: sn, thang: +mt[1], nam: +mt[2], nhanCotGT: c.gt >= 0 ? h2[c.gt] : '', items, namRow,
+      gtThang: items.reduce((s, x) => s + x.nt * (x.dg || 0), 0) });
+  }
+  return out;
+}

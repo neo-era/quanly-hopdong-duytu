@@ -313,6 +313,23 @@ if (BG && fs.existsSync(BG) && fs.readdirSync(BG).some((f) => /BIEN_B_N_NT/.test
   eq([gh10.ok, kt10.thangTruoc, kt10.noiTiep.length, b10.nhanCotGT], [true, 8, 125, 'thành tiền Tháng 9'], 'BBNT G2 T10: thiếu T9 → 125 mã lệch nối tiếp với T8; phát hiện nhãn cột "Tháng 9"');
   eq(Math.round(b10.gtThang), 6116880237, 'BBNT G2 T10: giá trị tháng 6.116.880.237');
 } else { skip++; console.log('… bỏ qua test BBNT (chưa có file)'); }
+
+// ---- BBNT Gói 3 (2 biên bản đơn vị T8) + Gói 2 T9 ----
+if (BG && fs.existsSync(BG) && fs.readdirSync(BG).some((f) => /Tha_ng_10_Go_i_3/.test(f))) {
+  const files = fs.readdirSync(BG); const tim = (re) => path.join(BG, files.find((f) => re.test(f)));
+  const docBG3 = (re, nm) => { const buf = fs.readFileSync(tim(re)); const names = XLSX.read(buf, { type: 'buffer', bookSheets: true }).SheetNames; const ch = P.chonSheetBangGia(names, nm);
+    return P.parseBangGiaKy(XLSX, XLSX.read(buf, { type: 'buffer', sheets: names.filter((n) => n === ch.sheet || /_11C$/.test(n)) }), nm); };
+  const st = K.emptyState(); K.apBangGiaKy(st, docBG3(/G3_BANG/, 'G3_x.xlsb'));
+  const bb = (re, sh) => P.parseBBNT(XLSX, XLSX.read(fs.readFileSync(tim(re)), { type: 'buffer' })).find((b) => b.sheet === sh);
+  const t7 = bb(/Tha_ng_7_Go_i_3/, 'BBNT T7- 2026'), tay = bb(/Tha_ng_10_Go_i_3/, 'BBNT T8-Cskv Tây'), bac = bb(/Tha_ng_10_Go_i_3/, 'BBNT T8- Cskv Bắc'), t10 = bb(/Tha_ng_10_Go_i_3/, 'BBNT T10- 2026');
+  for (const b of [t7, tay, bac, t10]) { const g = K.ghepBBNT(st, b); eq([g.ok, g.goi, g.lechKL.length, g.lechDG.length], [true, 'G3', 0, 0], `BBNT G3 ${b.sheet}: ghép bảng giá G3 (cột tên hiện, bỏ cột "theo PLHĐ 008" ẩn)`); }
+  eq(Math.round(t7.gtThang), 6892451011, 'BBNT G3 T7: giá trị 6.892.451.011 (= cột Thành Tiền tổng của file)');
+  K.luuBBNT(st, t7, 'G3', 'f'); K.luuBBNT(st, tay, 'G3', 'f', { themDonVi: true }); K.luuBBNT(st, bac, 'G3', 'f', { themDonVi: true });
+  const m8 = K.bbntMoiNhat(st, 'G3', 2026);
+  eq([m8.thang, m8.soBB, Math.round(m8.gt)], [8, 2, 7573492594], 'G3 T8 = CSKV Tây + CSKV Bắc = 7.573.492.594');
+  const kt = K.kiemBBNT(st, t10, 'G3');
+  eq([kt.thangTruoc, kt.noiTiep.length > 0], [8, true], 'G3 T10: kỳ trước ≠ lũy kế (T7 + NT T8 hai đơn vị) → thiếu T9');
+}
 const HMF = process.env.KL_HM;
 if (HMF && fs.existsSync(HMF)) {
   const wb = XLSX.read(fs.readFileSync(HMF), { type: 'buffer', sheets: ['Tong hop HM', 'G1_11C', 'G2_11C', 'G3_11C', 'G4_11C'] });

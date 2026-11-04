@@ -588,8 +588,14 @@ async function nhapBBNT() {
     if (!it.gh.ok) continue;
     it.kt = K.kiemBBNT(S, it.b, it.gh.goi);
     const k = it.gh.goi + '|' + it.b.nam + '|' + it.b.thang;
-    it.trung = daChon.has(k) || /mẫu/i.test(it.b.sheet);
+    // Cùng gói + tháng: cùng lũy kế kỳ trước nhưng KL NT khác → biên bản theo đơn vị (cộng lại); NT giống hệt → bản trùng
+    const sigNT = it.b.items.map((x) => x.nt).join(','), sigLT = it.b.items.map((x) => x.lkTruoc).join(',');
+    const cung = items.filter((o) => o !== it && o.chon && o.gh?.goi === it.gh.goi && o.b.nam === it.b.nam && o.b.thang === it.b.thang);
+    it.donVi = cung.length && cung.every((o) => o.sigLT === sigLT && o.sigNT !== sigNT);
+    it.sigNT = sigNT; it.sigLT = sigLT;
+    it.trung = (daChon.has(k) && !it.donVi) || /mẫu/i.test(it.b.sheet);
     it.chon = !it.trung; if (it.chon) daChon.add(k);
+    if (it.donVi) cung.forEach((o) => (o.donVi = true));
   }
   // Tháng bị thiếu: có BBNT tháng trước và sau (trong kho hoặc lượt nhập này) nhưng không có tháng giữa
   const coThang = new Set([...(S.nghiemThu || []).map((n) => `${n.goi}|${n.nam}|${n.thang}`), ...items.filter((x) => x.chon).map((x) => `${x.gh.goi}|${x.b.nam}|${x.b.thang}`)]);
@@ -613,6 +619,7 @@ async function nhapBBNT() {
         ${!kt.lkSai.length && !kt.vuot.length ? '<span class="pill grn mini">✓ lũy kế đúng, không vượt KL HĐ</span>' : ''}
         ${kt.thangTruoc ? (kt.noiTiep.length ? `<span class="pill red mini">${fmt(kt.noiTiep.length, 0)} mã: kỳ trước ≠ lũy kế T${kt.thangTruoc}${kt.thangTruoc < b.thang - 1 ? ` (thiếu BBNT T${kt.thangTruoc + 1}${kt.thangTruoc + 1 < b.thang - 1 ? '–T' + (b.thang - 1) : ''})` : ''}</span>` : `<span class="pill grn mini">✓ nối tiếp T${kt.thangTruoc}</span>`) : ''}</div>
       ${it.thieu ? `<p class="kl-warn">⚠ Thiếu biên bản ${it.thieu.map((t) => 'T' + t).join(', ')} của ${goiTen(g.goi)}: lũy kế kỳ trước của biên bản này sẽ không nối được với tháng trước.</p>` : ''}
+      ${it.donVi ? '<p class="muted">Biên bản theo đơn vị — cùng tháng với biên bản đơn vị khác; app cộng KL nghiệm thu các đơn vị, lũy kế = kỳ trước + tổng NT.</p>' : ''}
       ${it.trung ? '<p class="kl-warn">Trùng gói + tháng với sheet khác (hoặc là sheet mẫu) — mặc định bỏ chọn.</p>' : ''}
       ${b.nhanCotGT && /tháng \d+/i.test(b.nhanCotGT) && +b.nhanCotGT.match(/tháng (\d+)/i)[1] !== b.thang ? `<p class="kl-warn">Nhãn cột giá trị ghi "${esc(b.nhanCotGT)}" nhưng biên bản là tháng ${b.thang}.</p>` : ''}
       ${ds(g.lechKL, 'lệch KL HĐ')}${ds(g.lechDG, 'lệch đơn giá')}${ds(kt.lkSai, 'dòng lũy kế ≠ kỳ trước + NT')}${ds(kt.vuot, 'mã lũy kế vượt KL HĐ')}${ds(kt.thKhacNT, 'mã thực hiện ≠ nghiệm thu')}
@@ -626,14 +633,17 @@ async function nhapBBNT() {
       const chon = items.map((it, i) => [it, i]).filter(([it, i]) => it.gh?.ok && el.querySelector(`[data-ni="${i}"]`)?.checked).sort(([a], [b]) => a.b.thang - b.b.thang);
       await api.mutate((data) => {
         for (const [it, i] of chon) {
-          K.luuBBNT(S, it.b, it.gh.goi, it.f.name); n++;
+          K.luuBBNT(S, it.b, it.gh.goi, it.f.name, { themDonVi: !!it.donVi }); n++;
           const hd = hdCua(it.gh.goi);
           if (hd && el.querySelector(`[data-nk="${i}"]`)?.checked) {
             const ky = `${it.b.nam}-${String(it.b.thang).padStart(2, '0')}`;
             hd.kyThanhToan ||= [];
             const k = hd.kyThanhToan.find((x) => x.ky === ky);
             const gt = Math.round(it.b.gtThang);
-            if (k) k.giaTriNT = gt; else hd.kyThanhToan.push({ id: 'kt-' + Date.now().toString(36) + n, ky, mocHoSo: '', giaTriNT: gt, daThanhToan: 0 });
+            const cungTD = it.donVi ? chon.filter(([o, j]) => o.donVi && o.gh.goi === it.gh.goi && o.b.thang === it.b.thang && el.querySelector(`[data-nk="${j}"]`)?.checked) : [[it, i]];
+            if (cungTD[0][1] !== i) continue; // ghi 1 lần cho cả tháng
+            const gtTong = Math.round(cungTD.reduce((a, [o]) => a + o.b.gtThang, 0));
+            if (k) k.giaTriNT = gtTong; else hd.kyThanhToan.push({ id: 'kt-' + Date.now().toString(36) + n, ky, mocHoSo: '', giaTriNT: gtTong, daThanhToan: 0 });
             hd.kyThanhToan.sort((a, b) => String(a.ky).localeCompare(String(b.ky))); nk++;
           }
         }

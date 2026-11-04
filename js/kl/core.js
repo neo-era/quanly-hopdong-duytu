@@ -338,6 +338,23 @@ export function ghepBBNT(st, b) {
   for (const [goi, bg] of Object.entries(st.bangGia || {})) {
     const rs = bg.rows.filter((r) => +r[0] === +b.nam);
     if (rs.length !== b.items.length) continue;
+    // BBNT có cột mã HM (work_item_cs_id) → ghép theo mã (mã trùng giữa 2 khu vực lấy lần lượt)
+    if (b.items.every((x) => x.ma)) {
+      const kho = new Map(); rs.forEach((r) => { if (!kho.has(r[1])) kho.set(r[1], []); kho.get(r[1]).push(r); });
+      const gan = b.items.map((x) => kho.get(x.ma)?.shift());
+      if (gan.every(Boolean)) {
+        const k3 = { ok: true, goi, theoMa: true, lechTen: [], lechKL: [], lechDG: [] };
+        b.items.forEach((x, i) => {
+          const [, ma, kl, klSap, dg] = gan[i];
+          if (tenChuan(x.ten) !== tenChuan(st.catalog[ma]?.ten)) k3.lechTen.push(`${ma}: "${x.ten}" ≠ "${st.catalog[ma]?.ten}"`);
+          const klF = x.klSap ?? x.klHD, klK = x.klSap !== null && x.klSap !== undefined ? klSap : kl;
+          if (klF !== null && Math.abs(klF - klK) > 1e-6) k3.lechKL.push(`${ma}: ${klF} ≠ ${klK}`);
+          if (x.dg !== null && Math.abs(x.dg - dg) > 0.5) k3.lechDG.push(`${ma}: ${x.dg} ≠ ${dg}`);
+          x.maK = ma; x.tran = klF ?? (klSap || kl);
+        });
+        return k3;
+      }
+    }
     const kq = { ok: true, goi, lechTen: [], lechKL: [], lechDG: [] };
     for (let i = 0; i < rs.length; i++) {
       const [, ma, kl, klSap, dg] = rs[i]; const x = b.items[i];
@@ -347,7 +364,28 @@ export function ghepBBNT(st, b) {
       if (klF !== null && Math.abs(klF - klK) > 1e-6) kq.lechKL.push(`${ma}: ${klF} ≠ ${klK}`);
       if (x.dg !== null && Math.abs(x.dg - dg) > 0.5) kq.lechDG.push(`${ma}: ${x.dg} ≠ ${dg}`);
     }
-    if (kq.lechTen.length) { tot ||= { ...kq, ok: false }; continue; }
+    if (kq.lechTen.length) {
+      // Thứ tự dòng khác bảng giá → ghép theo tên + ĐVT (tên trùng thì lấy lần lượt theo thứ tự xuất hiện)
+      const kho = new Map();
+      rs.forEach((r) => { const k = tenChuan(st.catalog[r[1]]?.ten) + '|' + tenChuan(st.catalog[r[1]]?.dvt).replace(/^1\s+/, ''); if (!kho.has(k)) kho.set(k, []); kho.get(k).push(r); });
+      const gan = []; let hong = null;
+      for (const x of b.items) {
+        const k = tenChuan(x.ten) + '|' + tenChuan(x.dvt).replace(/^1\s+/, '');
+        const r = kho.get(k)?.shift();
+        if (!r) { hong = `dòng ${x.row}: "${x.ten}" (${x.dvt}) không có trong bảng giá ${goi}`; break; }
+        gan.push(r);
+      }
+      if (hong) { tot ||= { ...kq, ok: false, lechTen: [hong] }; continue; }
+      const k2 = { ok: true, goi, theoTen: true, lechTen: [], lechKL: [], lechDG: [] };
+      b.items.forEach((x, i) => {
+        const [, ma, kl, klSap, dg] = gan[i];
+        const klF = x.klSap ?? x.klHD, klK = x.klSap !== null && x.klSap !== undefined ? klSap : kl;
+        if (klF !== null && Math.abs(klF - klK) > 1e-6 && Math.abs(klF - klSap) > 1e-6) k2.lechKL.push(`${ma}: ${klF} ≠ ${klK}`);
+        if (x.dg !== null && Math.abs(x.dg - dg) > 0.5) k2.lechDG.push(`${ma}: ${x.dg} ≠ ${dg}`);
+        x.maK = ma; x.tran = klF ?? (klSap || kl);
+      });
+      return k2;
+    }
     b.items.forEach((x, i) => { x.maK = rs[i][1]; x.tran = (x.klSap ?? x.klHD) ?? (rs[i][3] || rs[i][2]); });
     return kq;
   }
@@ -361,7 +399,9 @@ export function kiemBBNT(st, b, goi) {
     if (x.tran !== null && x.tran !== undefined && x.lk - x.tran > 1e-6) kq.vuot.push(`${x.maK}: lũy kế ${x.lk} > HĐ ${x.tran}`);
     if (x.th !== null && Math.abs(x.th - x.nt) > 1e-6) kq.thKhacNT.push(`${x.maK}: TH ${x.th} ≠ NT ${x.nt}`);
   }
-  const truoc = (st.nghiemThu || []).filter((n) => n.goi === goi && n.nam === b.nam && n.thang < b.thang).sort((a, c) => c.thang - a.thang)[0];
+  const L = (st.nghiemThu || []).filter((n) => n.goi === goi && n.nam === b.nam && n.thang < b.thang);
+  const tMax = L.length ? Math.max(...L.map((n) => n.thang)) : null;
+  const truoc = tMax ? gopThang(L.filter((n) => n.thang === tMax)) : null;
   if (truoc) {
     kq.thangTruoc = truoc.thang;
     const lkT = new Map(truoc.rows.map((r) => [r[0], r[2]]));
@@ -369,16 +409,32 @@ export function kiemBBNT(st, b, goi) {
   }
   return kq;
 }
-/** Lưu BBNT (thay bản cũ cùng gói + năm + tháng). rows: [ma, KL nghiệm thu tháng, lũy kế đến hết kỳ, đơn giá]. */
-export function luuBBNT(st, b, goi, file) {
+/**
+ * Lưu BBNT. Một tháng có thể có nhiều biên bản theo đơn vị (vd G3 T8: CSKV Tây + CSKV Bắc, cùng lũy kế kỳ trước):
+ * thay bản cũ cùng gói + năm + tháng + sheet; thay hết bản cũ của tháng khi themDonVi = false.
+ * rows: [ma, KL nghiệm thu tháng, lũy kế đến hết kỳ, đơn giá, lũy kế kỳ trước].
+ */
+export function luuBBNT(st, b, goi, file, { themDonVi = false } = {}) {
   st.nghiemThu ||= [];
-  st.nghiemThu = st.nghiemThu.filter((n) => !(n.goi === goi && n.nam === b.nam && n.thang === b.thang));
+  st.nghiemThu = st.nghiemThu.filter((n) => !(n.goi === goi && n.nam === b.nam && n.thang === b.thang && (!themDonVi || n.sheet === b.sheet)));
   const rec = { id: uid('nt'), goi, nam: b.nam, thang: b.thang, file, sheet: b.sheet, ngay: new Date().toISOString(), gt: b.gtThang,
-    rows: b.items.filter((x) => x.nt || x.lk).map((x) => [x.maK, x.nt, x.lk, x.dg || 0]) };
+    rows: b.items.filter((x) => x.nt || x.lk || x.lkTruoc).map((x) => [x.maK, x.nt, x.lk, x.dg || 0, x.lkTruoc || 0]) };
   st.nghiemThu.push(rec);
   return rec;
 }
-/** BBNT mới nhất của gói trong năm (để lấy lũy kế nghiệm thu theo mã HM). */
+/** Gộp các biên bản cùng tháng (theo đơn vị): NT tháng cộng lại, lũy kế = lũy kế kỳ trước + Σ NT. */
+export function gopThang(list) {
+  if (!list.length) return null;
+  if (list.length === 1 && list[0].rows.every((r) => r.length < 5)) return list[0];
+  const m = new Map();
+  for (const n of list) n.rows.forEach((r) => { const o = m.get(r[0]) || { nt: 0, dg: r[3], lkTruoc: r[4] ?? (r[2] - r[1]) }; o.nt += r[1]; m.set(r[0], o); });
+  const rows = [...m].map(([ma, o]) => [ma, o.nt, o.lkTruoc + o.nt, o.dg, o.lkTruoc]);
+  return { ...list[0], id: list.map((n) => n.id).join('+'), sheet: list.map((n) => n.sheet).join(' + '), gt: list.reduce((a, n) => a + n.gt, 0), rows, soBB: list.length };
+}
+/** BBNT mới nhất của gói trong năm (đã gộp các biên bản đơn vị cùng tháng). */
 export function bbntMoiNhat(st, goi, nam) {
-  return (st.nghiemThu || []).filter((n) => n.goi === goi && n.nam === +nam).sort((a, b) => b.thang - a.thang)[0] || null;
+  const L = (st.nghiemThu || []).filter((n) => n.goi === goi && n.nam === +nam);
+  if (!L.length) return null;
+  const t = Math.max(...L.map((n) => n.thang));
+  return gopThang(L.filter((n) => n.thang === t));
 }

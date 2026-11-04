@@ -85,3 +85,4 @@ Bước 1 doc (file này) → **Chốt UI** (2 phương án màn "Vị trí" + m
 - Kiểm tra: tên/KL HĐ/đơn giá so bảng giá ký; lũy kế = kỳ trước + NT; không vượt KL HĐ; nối tiếp tháng trước; cảnh báo thiếu tháng; nhãn cột sai tháng.
 - Ghi giá trị NT tháng (Σ KL NT × ĐG, đúng số dòng NĂM của BBNT) vào kỳ thanh toán của HĐ tương ứng; Đối chiếu HM hiện "NT lũy kế" theo BBNT mới nhất.
 - Kết quả thật: G1 T7–T10 khớp hoàn toàn, lũy kế 19.850.995.669 đ; G2 T7, T8, T10 khớp, thiếu BBNT T9.
+- 04/11 (2): BBNT có cột mã HM → ghép theo mã; thứ tự dòng khác bảng giá → ghép theo tên + ĐVT (G3); chọn cột tên đang in (bỏ cột "theo PLHĐ 008"); nhận biên bản theo đơn vị cùng tháng (G3 T8 Tây + Bắc) → cộng NT, lũy kế = kỳ trước + tổng NT, ghi 1 kỳ vào HĐ.

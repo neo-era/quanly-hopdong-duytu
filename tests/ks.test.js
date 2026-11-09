@@ -61,10 +61,14 @@ eq(S.docSo('1.5'), 1.5, '"1.5" thập phân');
   eq(S.anhXa({ _type: 'vo_tu', STT: 'VT-1', 'Tuyến đường': 'A', Phường: 'Bàn Cờ', 'Tủ điều khiển': 'T', 'Số lượng': 1 }).dich, 'KHAC', 'vo_tu → Khác (không phải PL I)');
   eq(S.anhXa({ _type: 'nang_mong', STT: 'NM-1', 'Tuyến đường': 'A', Phường: 'B', 'Tủ điều khiển': 'T', 'Độ cao nâng': 200, 'Số lượng': 2 }).vt.kl, 2, 'nâng móng: KL = Số lượng, không lấy Độ cao nâng');
   eq(S.anhXa({ _type: 'tc_ngam', STT: 'TCG-1', 'Tuyến đường': 'A', Phường: 'B', 'Tủ điều khiển': 'T', 'Số lượng': '39m' }).vt.kl, 39, 'cáp ngầm "39m" → 39');
-  eq(S.anhXa({ _type: 'thao_go_bang_ron', STT: 'BR-1' }), null, 'băng rôn: không lấy');
-  eq(S.anhXa({ _type: 'bao_cao_su_co', STT: 'SC-1' }), null, 'sự cố: không lấy');
-  eq(S.anhXa({ _type: 'tang_cuong_den', STT: 'TCD-1', 'Số đèn dự kiến': 3 }), null, 'tăng cường đèn: mặc định không lấy');
-  eq(S.anhXa({ _type: 'tang_cuong_den', STT: 'TCD-1', 'Tuyến đường': 'A', Phường: 'B', 'Tủ điều khiển': 'T', 'Số đèn dự kiến': 3 }, { layThem: ['tang_cuong_den'] }).vt.kl, 3, 'tăng cường đèn: bật thì lấy Số đèn dự kiến');
+  eq(Object.keys(S.KS_MAP).length, 17, 'đủ 17 loại khảo sát đều có đích (anh chốt 09/11)');
+  const br = S.anhXa({ _type: 'thao_go_bang_ron', STT: 'BR-1', 'Tuyến đường': 'A', Phường: 'Bàn Cờ', 'Vị trí': 'số 10–20', 'Loại quảng cáo': 'Băng rôn', 'Số lượng': 12 });
+  eq([br.dich, br.vt.kl, br.vt.lyTrinhDau, br.dvt], ['KHAC', 12, 'số 10–20', 'tấm'], 'băng rôn: không cần cột TĐK, KL = Số lượng (tấm)');
+  const sc = S.anhXa({ _type: 'bao_cao_su_co', STT: 'SC-1', 'Tuyến đường': 'A', Phường: 'B', 'Tủ điều khiển': 'T', 'Mã tủ': 'TM118.03', 'Hiện trạng sự cố': 'Gãy trụ' });
+  eq([sc.dich, sc.vt.kl], ['KHAC', null], 'sự cố: KL để trống (không có cột số lượng)');
+  ok(/TM118\.03/.test(sc.vt.ghiChu) && /Gãy trụ/.test(sc.vt.ghiChu), 'sự cố: mã tủ + hiện trạng → ghi chú');
+  eq(S.anhXa({ _type: 'tang_cuong_den', STT: 'TCD-1', 'Tuyến đường': 'A', Phường: 'B', 'Tủ điều khiển': 'T', 'Số đèn dự kiến': 3 }).vt.kl, 3, 'tăng cường đèn: lấy Số đèn dự kiến');
+  eq(S.anhXa({ _type: 'ngam_hoa', STT: 'NH-1', 'Tuyến đường': 'A', Phường: 'B', 'Tủ điều khiển': 'T', 'Số đèn dự kiến': 5 }).vt.kl, 5, 'ngầm hóa: lấy Số đèn dự kiến');
   let loi = null; try { S.anhXa({ _type: 'thay_tru', STT: 'x', 'Tuyến đường': 'A' }); } catch (e) { loi = e.message; }
   ok(/Thiếu cột/.test(loi || ''), 'thiếu cột → báo lỗi rõ');
   eq(S.anhXa(TRU({ 'Số lượng': '' })).vt.kl, null, 'KL trống giữ trống');

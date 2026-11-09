@@ -43,13 +43,15 @@ export function docSo(x) {
   const m = t.match(/^(\d+(?:[.,]\d+)*)\s*(m|mét|met)?$/i);
   if (!m) return null;
   t = m[1];
-  if (t.includes(',') && t.includes('.')) t = t.replace(/\./g, '').replace(',', '.');
+  // Kiểu Việt Nam: "." tách nghìn, "," thập phân. "1.234" / "1.234.567" = hàng nghìn; "1.5" = thập phân
+  if (/^\d{1,3}(\.\d{3})+$/.test(t)) t = t.replace(/\./g, '');
+  else if (t.includes(',') && t.includes('.')) t = t.replace(/\./g, '').replace(',', '.');
   else if (t.includes(',')) t = t.replace(',', '.');
   const n = Number(t);
   return isFinite(n) ? n : null;
 }
 const txt = (x) => (x === null || x === undefined ? '' : String(x).trim());
-const bo = (p) => txt(p).replace(/^(phường|phuong|p\.|xã|xa)\s+/i, '').trim();
+const bo = (p) => txt(p).replace(/^(?:(?:phường|phuong|xã|xa)\s+|p\.\s*|p\s+)/i, '').trim();
 /** Khoá so trùng vị trí: trạm + phường (bỏ tiền tố) + tuyến. */
 const keyKS = (v) => keyVT({ tram: v.tram, phuong: bo(v.phuong), tuyen: v.tuyen });
 /** Băm ngắn (FNV-1a) — phát hiện bản ghi khảo sát đã đổi. */
@@ -117,6 +119,7 @@ export function xemTruoc(st, rows, opts = {}) {
   const dem = { moi: 0, thayDoi: 0, trungPL: 0, thieuKL: 0, xoa: 0, sttTrung: 0 };
   const sttCount = new Map();
   for (const r of rows) if (KS_MAP[r?._type] && !txt(r['Deleted At'])) { const k = r._type + '#' + txt(r.STT); sttCount.set(k, (sttCount.get(k) || 0) + 1); }
+  const plMap = new Map(st.phuLuc.map((p) => [p.id, p]));
   const items = [];
   for (const row of rows) {
     const a = anhXa(row, opts);
@@ -124,15 +127,19 @@ export function xemTruoc(st, rows, opts = {}) {
     const key = a.vt.nguon.ks;
     const cu = daLay.get(key);
     let trangThai;
-    if (a.xoa) { if (!cu || cu.nguon.xoa) continue; trangThai = 'xoa'; }
+    // Bản đã xoá: bỏ qua nếu chưa từng lấy, đã đánh dấu, hoặc còn bản hiệu lực cùng STT
+    if (a.xoa) { if (!cu || cu.nguon.xoa || sttCount.get(key)) continue; trangThai = 'xoa'; }
     else if ((sttCount.get(key) || 0) > 1) trangThai = 'sttTrung';
     else if (cu) trangThai = cu.nguon.hash === a.vt.nguon.hash && !cu.nguon.xoa ? 'daCo' : 'thayDoi';
     else if (keyPL.has(a.dich + '§' + keyKS(a.vt))) trangThai = 'trungPL';
     else trangThai = 'moi';
     const g = goiTheoPhuong(st, a.vt.phuong, pg);
     const thieuKL = a.vt.kl === null && trangThai !== 'xoa';
-    const it = { key, type: a.type, stt: a.stt, dich: a.dich, dvt: a.dvt, vt: a.vt, trangThai, thieuKL, goiYPLIV: a.goiYPLIV,
-      goi: cu?.goi || g.goi, goiList: g.list, chon: ['moi', 'thayDoi', 'xoa'].includes(trangThai), viTriId: cu?.id || null };
+    // Vị trí đã vào đợt phụ lục thật / đã thực hiện: thay đổi từ KS không chọn sẵn (phải xem rồi mới cập nhật)
+    const daVaoDot = !!cu && !plMap.get(cu.plId)?.nhap;
+    const it = { key, type: a.type, stt: a.stt, dich: a.dich, dvt: a.dvt, vt: a.vt, trangThai, thieuKL, goiYPLIV: a.goiYPLIV, daVaoDot,
+      goi: cu?.goi || g.goi, goiList: g.list, chon: trangThai === 'moi' || trangThai === 'xoa' || (trangThai === 'thayDoi' && !daVaoDot && cu?.trangThai !== 'da'),
+      viTriId: cu?.id || null };
     items.push(it);
     if (dem[trangThai] !== undefined) dem[trangThai]++;
     if (thieuKL && trangThai !== 'daCo' && trangThai !== 'trungPL' && trangThai !== 'sttTrung') dem.thieuKL++;
@@ -172,11 +179,12 @@ export function apDung(st, items, opts = {}) {
       const v = st.viTri.find((x) => x.id === it.viTriId);
       if (!v) continue;
       const pl = st.phuLuc.find((p) => p.id === v.plId);
-      if (v.trangThai === 'da') { v.nguon = { ...v.nguon, doiSauTH: true, hashMoi: it.vt.nguon.hash }; kq.giuKL++; continue; }
+      if (v.trangThai === 'da') { v.nguon = { ...v.nguon, doiSauTH: true, hash: it.vt.nguon.hash }; kq.giuKL++; continue; }
+      const thuocSo = v.nguon?.thuocSo;
       const giu = { id: v.id, plId: v.plId, stt: v.stt, goi: goi || v.goi, donVi: v.donVi, trangThai: v.trangThai, thangNT: v.thangNT, thucHien: v.thucHien,
         chiTiet: v.chiTiet, chiTietSua: v.chiTietSua };
       for (const k of Object.keys(v)) delete v[k];
-      Object.assign(v, it.vt, giu, { nguon: { ...it.vt.nguon, type: it.type, stt: it.stt, thuocSo: false } });
+      Object.assign(v, it.vt, giu, { nguon: { ...it.vt.nguon, type: it.type, stt: it.stt, thuocSo: !!thuocSo } });
       if (!v.chiTietSua) v.chiTiet = chiTietTu(st, pl?.loai || loai, it.type, v.kl);
       kq.capNhat++;
     } else if (it.trangThai === 'xoa') {

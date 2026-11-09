@@ -5,6 +5,7 @@
 //  - chuyenNhap: nháp → đợt phụ lục thật (chỉ vị trí có KL, có gói, đã xác nhận thuộc Sở)
 //  - tomTat: bản tóm tắt HĐ đẩy sang app Khảo sát (4 bảng HD_*)
 import { norm, keyVT, apMau, gopMa, doiChieu, maGoiThauCua, LOAI_TEN } from './core.js';
+import { goiYMa, MA_THEO_LOAI } from './ksma.js';
 
 let seq = 0;
 const uid = (p) => `${p}-${Date.now().toString(36)}${(seq++).toString(36)}${Math.random().toString(36).slice(2, 6)}`;
@@ -17,17 +18,17 @@ const QC_TRU = 'Quy cách trụ (loại trụ: chiều cao VD: STK 9m; be tông 
  */
 export const KS_MAP = {
   thay_den:     { ten: 'Thay đèn', dich: 'PLII', kl: null, hienHuu: 'Số đèn hiện hữu', dau: 'Đầu tuyến', cuoi: 'Cuối tuyến', them: ['Công suất đèn hiện hữu'], dvt: 'bộ' },
-  thay_tru:     { ten: 'Thay trụ', dich: 'PLIII', kl: 'Số lượng', dau: 'Vị trí', them: [QC_TRU], dvt: 'trụ' },
+  thay_tru:     { ten: 'Thay trụ', dich: 'PLIII', kl: 'Số lượng', dau: 'Vị trí', them: [QC_TRU], qc: QC_TRU, dvt: 'trụ' },
   vo_tu:        { ten: 'Vỏ tủ điều khiển', dich: 'KHAC', kl: 'Số lượng', dvt: 'tủ' },
-  tc_noi:       { ten: 'Thay cáp nổi', dich: 'KHAC', kl: 'Số lượng', them: ['Loại cáp hiện hữu'], dvt: 'm' },
+  tc_noi:       { ten: 'Thay cáp nổi', dich: 'KHAC', kl: 'Số lượng', them: ['Loại cáp hiện hữu'], qc: 'Loại cáp hiện hữu', dvt: 'm' },
   tc_ngam:      { ten: 'Thay cáp ngầm', dich: 'KHAC', kl: 'Số lượng', them: ['Loại cáp'], dvt: 'm' },
-  cap_luon_can: { ten: 'Cáp luồn cần', dich: 'KHAC', kl: 'Số lượng', dau: 'Vị trí', them: ['Loại cáp'], dvt: 'm' },
-  hkn:          { ten: 'Hộp kín nước', dich: 'KHAC', kl: 'Số lượng', them: ['Loại hộp (6A, 10A)'], dvt: 'hộp' },
-  thay_can:     { ten: 'Thay cần đèn', dich: 'KHAC', kl: 'Số lượng', dau: 'Vị trí', them: ['Loại cần (3,8m ; 3m...)'], dvt: 'cần' },
-  choa_den:     { ten: 'Chóa đèn', dich: 'KHAC', kl: 'Số lượng', them: ['Loại chóa'], dvt: 'bộ' },
-  nap_tru:      { ten: 'Nắp trụ', dich: 'KHAC', kl: 'Số lượng', dau: 'Số trụ', them: ['Quy cách'], dvt: 'cái' },
+  cap_luon_can: { ten: 'Cáp luồn cần', dich: 'KHAC', kl: 'Số lượng', dau: 'Vị trí', them: ['Loại cáp'], qc: 'Loại cáp', dvt: 'm' },
+  hkn:          { ten: 'Hộp kín nước', dich: 'KHAC', kl: 'Số lượng', them: ['Loại hộp (6A, 10A)'], qc: 'Loại hộp (6A, 10A)', dvt: 'hộp' },
+  thay_can:     { ten: 'Thay cần đèn', dich: 'KHAC', kl: 'Số lượng', dau: 'Vị trí', them: ['Loại cần (3,8m ; 3m...)'], qc: 'Loại cần (3,8m ; 3m...)', dvt: 'cần' },
+  choa_den:     { ten: 'Chóa đèn', dich: 'KHAC', kl: 'Số lượng', them: ['Loại chóa'], qc: 'Loại chóa', dvt: 'bộ' },
+  nap_tru:      { ten: 'Nắp trụ', dich: 'KHAC', kl: 'Số lượng', dau: 'Số trụ', them: ['Quy cách'], qc: 'Quy cách', dvt: 'cái' },
   decal_so_tru: { ten: 'Decal số trụ', dich: 'KHAC', kl: 'Số lượng', dau: 'Vị trí', dvt: 'cái' },
-  tc_den_kc_xa: { ten: 'Tăng cường đèn KC xa', dich: 'KHAC', kl: 'Số lượng', dau: 'Vị trí', them: ['Chủng loại đèn'], dvt: 'bộ' },
+  tc_den_kc_xa: { ten: 'Tăng cường đèn KC xa', dich: 'KHAC', kl: 'Số lượng', dau: 'Vị trí', them: ['Chủng loại đèn'], qc: 'Chủng loại đèn', dvt: 'bộ' },
   nang_mong:    { ten: 'Nâng móng trụ', dich: 'KHAC', kl: 'Số lượng', dau: 'Vị trí', them: ['Quy cách móng'], dvt: 'trụ' },
   // Anh chốt 09/11/2026: mọi hạng mục khảo sát đều có hạng mục hợp đồng duy tu tương ứng → lấy cả 17 loại
   tang_cuong_den: { ten: 'Tăng cường đèn', dich: 'KHAC', kl: 'Số đèn dự kiến', dau: 'Đầu tuyến', cuoi: 'Cuối tuyến', dvt: 'bộ' },
@@ -88,8 +89,9 @@ export function anhXa(row, opts = {}) {
     donVi: '',
   };
   if (M.hienHuu) vt.hienHuu = docSo(row[M.hienHuu]);
+  if (M.qc && txt(row[M.qc])) vt.thuoc = { qc: txt(row[M.qc]) };   // thuộc tính để gợi ý mã HM (ksma.js)
   for (const k of Object.keys(vt)) if (vt[k] === null && !['kl'].includes(k)) delete vt[k];
-  const goc = JSON.stringify([vt.tram, vt.phuong, vt.tuyen, vt.kl, vt.hienHuu, vt.lyTrinhDau, vt.lyTrinhCuoi, vt.namLD, vt.ghiChu]);
+  const goc = JSON.stringify([vt.tram, vt.phuong, vt.tuyen, vt.kl, vt.hienHuu, vt.lyTrinhDau, vt.lyTrinhCuoi, vt.namLD, vt.ghiChu, vt.thuoc?.qc]);
   vt.nguon = { ks: type + '#' + stt, hash: bam(goc), thuocSo: false, xoa: false };
   return { type, stt, dich: M.dich, dvt: M.dvt, vt, xoa: !!txt(row['Deleted At']), goiYPLIV: type === 'thay_tru' && /trang tr[íi]/i.test(txt(row[QC_TRU])) };
 }
@@ -142,6 +144,7 @@ export function xemTruoc(st, rows, opts = {}) {
     // Vị trí đã vào đợt phụ lục thật / đã thực hiện: thay đổi từ KS không chọn sẵn (phải xem rồi mới cập nhật)
     const daVaoDot = !!cu && !plMap.get(cu.plId)?.nhap;
     const it = { key, type: a.type, stt: a.stt, dich: a.dich, dvt: a.dvt, vt: a.vt, trangThai, thieuKL, goiYPLIV: a.goiYPLIV, daVaoDot,
+      goiY: goiYCua(st, a.dich, a.type, a.vt.thuoc), coMau: mauCua(st, a.dich, a.type).some((m) => m.ma),
       goi: cu?.goi || g.goi, goiList: g.list, chon: trangThai === 'moi' || trangThai === 'xoa' || (trangThai === 'thayDoi' && !daVaoDot && cu?.trangThai !== 'da'),
       viTriId: cu?.id || null };
     items.push(it);
@@ -162,7 +165,22 @@ function plNhap(st, loai, namKH) {
   return p;
 }
 const mauCua = (st, loai, type) => (loai === LOAI_KHAC ? st.mau['KS:' + type] : st.mau[loai]) || [];
-const chiTietTu = (st, loai, type, kl) => (kl === null || kl === undefined ? [] : apMau(mauCua(st, loai, type), kl));
+/**
+ * Chi tiết HM cho vị trí lấy từ KS: có MẪU người dùng khai cho loại đó → theo mẫu; chưa có mẫu → mặc định theo mã HM
+ * trong danh mục HĐ của app (ksma.js, chọn theo quy cách khảo sát). theoMau: chỉ dùng mẫu (nút "Áp mẫu").
+ */
+function chiTietTu(st, loai, type, kl, thuoc, { theoMau = false } = {}) {
+  if (kl === null || kl === undefined) return [];
+  const mau = mauCua(st, loai, type).filter((m) => m.ma);
+  if (mau.length || theoMau) return apMau(mau, kl);
+  return goiYMa(type, thuoc, kl, st.catalog)?.chiTiet || [];
+}
+/** Gợi ý mã HM (để hiện cho người dùng xem lại): {ma, chac, ly} | null; null khi đang theo mẫu. */
+export function goiYCua(st, loai, type, thuoc) {
+  if (mauCua(st, loai, type).some((m) => m.ma)) return null;
+  const g = goiYMa(type, thuoc, 1, st.catalog);
+  return g ? { ma: g.ma, chac: g.chac, ly: g.ly } : null;
+}
 
 /** Áp các mục đã chọn. opts: { namKH, chonGoi: {key: 'G2'}, chonDich: {key: 'PLIV'} }. */
 export function apDung(st, items, opts = {}) {
@@ -177,7 +195,7 @@ export function apDung(st, items, opts = {}) {
       if (it.vt.nhom && !pl.nhom.includes(it.vt.nhom)) pl.nhom.push(it.vt.nhom);
       const stt = st.viTri.filter((v) => v.plId === pl.id).length + 1;
       st.viTri.push({ ...it.vt, nguon: { ...it.vt.nguon, type: it.type, stt: it.stt }, id: uid('vt'), plId: pl.id, stt, goi,
-        chiTiet: chiTietTu(st, loai, it.type, it.vt.kl), chiTietSua: false, trangThai: 'chua', thangNT: '', thucHien: null });
+        chiTiet: chiTietTu(st, loai, it.type, it.vt.kl, it.vt.thuoc), goiY: goiYCua(st, loai, it.type, it.vt.thuoc), chiTietSua: false, trangThai: 'chua', thangNT: '', thucHien: null });
       kq.them++;
     } else if (it.trangThai === 'thayDoi') {
       const v = st.viTri.find((x) => x.id === it.viTriId);
@@ -189,7 +207,7 @@ export function apDung(st, items, opts = {}) {
         chiTiet: v.chiTiet, chiTietSua: v.chiTietSua };
       for (const k of Object.keys(v)) delete v[k];
       Object.assign(v, it.vt, giu, { nguon: { ...it.vt.nguon, type: it.type, stt: it.stt, thuocSo: !!thuocSo } });
-      if (!v.chiTietSua) v.chiTiet = chiTietTu(st, pl?.loai || loai, it.type, v.kl);
+      if (!v.chiTietSua) { v.chiTiet = chiTietTu(st, pl?.loai || loai, it.type, v.kl, v.thuoc); v.goiY = goiYCua(st, pl?.loai || loai, it.type, v.thuoc); }
       kq.capNhat++;
     } else if (it.trangThai === 'xoa') {
       const v = st.viTri.find((x) => x.id === it.viTriId);
@@ -214,7 +232,7 @@ export function suaKL(st, id, kl) {
   if (!v) return false;
   const pl = st.phuLuc.find((p) => p.id === v.plId);
   v.kl = kl === '' || kl === null || kl === undefined ? null : docSo(kl);
-  if (!v.chiTietSua) v.chiTiet = chiTietTu(st, pl?.loai, v.nguon?.type, v.kl);
+  if (!v.chiTietSua) v.chiTiet = chiTietTu(st, pl?.loai, v.nguon?.type, v.kl, v.thuoc);
   return true;
 }
 
@@ -304,8 +322,10 @@ export function tomTat(st, nam) {
   }
   const loaiHM = [];
   for (const [type, M] of Object.entries(KS_MAP)) {
-    const mau = M.dich === LOAI_KHAC ? st.mau['KS:' + type] : st.mau[M.dich];
-    for (const ma of gopMa((mau || []).map((m) => ({ ma: m.ma, kl: 1 }))).map((x) => x.ma)) loaiHM.push([type, ma]);
+    const mau = (M.dich === LOAI_KHAC ? st.mau['KS:' + type] : st.mau[M.dich]) || [];
+    // Có mẫu → mã trong mẫu; chưa có mẫu → các mã mặc định của loại có trong danh mục HĐ
+    const ds = mau.some((m) => m.ma) ? mau.map((m) => m.ma) : (MA_THEO_LOAI[type] || []).filter((ma) => st.catalog?.[ma]);
+    for (const ma of gopMa(ds.map((ma) => ({ ma, kl: 1 }))).map((x) => x.ma)) loaiHM.push([type, ma]);
   }
   const plMap = new Map(st.phuLuc.map((p) => [p.id, p]));
   const lienKet = [];
@@ -326,7 +346,7 @@ export function apMauKS(st, type, ghiDe = false) {
   let n = 0;
   for (const v of st.viTri) {
     if (!ids.has(v.plId) || v.nguon?.type !== type || (v.chiTietSua && !ghiDe)) continue;
-    v.chiTiet = chiTietTu(st, LOAI_KHAC, type, v.kl); v.chiTietSua = false; n++;
+    v.chiTiet = chiTietTu(st, LOAI_KHAC, type, v.kl, v.thuoc, { theoMau: true }); v.goiY = null; v.chiTietSua = false; n++;
   }
   return n;
 }

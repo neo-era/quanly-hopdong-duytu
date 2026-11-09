@@ -8,7 +8,7 @@
 //              chiTiet:[{ma, kl}], trangThai:'chua'|'dang'|'da', thangNT, thucHien: {ma: kl} | null }]
 import { MA_GOI_THAU } from './parse.js';
 
-export const LOAI_TEN = { PLI: 'PL I · Thay/sửa tủ', PLII: 'PL II · HPS→LED', PLIII: 'PL III · Sửa/thay trụ', PLIV: 'PL IV · Trụ trang trí' };
+export const LOAI_TEN = { PLI: 'PL I · Thay/sửa tủ', PLII: 'PL II · HPS→LED', PLIII: 'PL III · Sửa/thay trụ', PLIV: 'PL IV · Trụ trang trí', KHAC: 'Khác · ngoài phụ lục' };
 
 export function emptyState() {
   return { catalog: {}, catalogNam: [], catalogNguon: null, bangGia: {}, mau: { PLI: [], PLII: [], PLIII: [], PLIV: [] }, phuLuc: [], viTri: [] };
@@ -122,9 +122,13 @@ function vtTheo(st, goi, nam) {
 /** Đối chiếu theo mã HM cho 1 gói + 1 năm. */
 export const laDoiTac = (v) => /lữ gia|lu gia|phú thọ|phu tho/i.test(String(v.donVi || ''));
 export function doiChieu(st, goi, nam, { phan = 'ld' } = {}) {
-  const vts = vtTheo(st, goi, nam).filter((v) => phan !== 'sap' || !laDoiTac(v));
+  // Vị trí trong phụ lục NHÁP (đề xuất lấy từ app Khảo sát) không cộng vào "Đã vào KH" — chỉ hiện cột khKS
+  const nhapIds = new Set(st.phuLuc.filter((p) => p.nhap).map((p) => p.id));
+  const all = vtTheo(st, goi, nam).filter((v) => phan !== 'sap' || !laDoiTac(v));
+  const vts = all.filter((v) => !nhapIds.has(v.plId));
   const acc = new Map();
-  const get = (ma) => { if (!acc.has(ma)) acc.set(ma, { ma, kh: 0, th: 0, nVT: 0 }); return acc.get(ma); };
+  const get = (ma) => { if (!acc.has(ma)) acc.set(ma, { ma, kh: 0, th: 0, nVT: 0, khKS: 0 }); return acc.get(ma); };
+  for (const v of all) if (nhapIds.has(v.plId)) for (const c of v.chiTiet || []) get(c.ma).khKS += +c.kl || 0;
   for (const v of vts) {
     const seen = new Set();
     for (const c of v.chiTiet || []) { const a = get(c.ma); a.kh += +c.kl || 0; if (!seen.has(c.ma)) { a.nVT++; seen.add(c.ma); } }
@@ -155,6 +159,7 @@ export function doiChieu(st, goi, nam, { phan = 'ld' } = {}) {
       khDV: dvMap.has(a.ma) ? round(dvMap.get(a.ma).tong) : null, khDVTheo: dvMap.get(a.ma)?.theo || [],
       vuotDV: dvMap.has(a.ma) && dvMap.get(a.ma).tong - hd > 1e-9,
       ntLK: bbnt ? round(ntMap.get(a.ma) || 0) : null,
+      khKS: round(a.khKS),
     };
   });
   rows.sort((x, y) => (y.vuot - x.vuot) || ((y.vuot ? y.kh - y.hd : 0) - (x.vuot ? x.kh - x.hd : 0)) || x.ma.localeCompare(y.ma, 'vi', { numeric: true }));

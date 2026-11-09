@@ -428,3 +428,6 @@ body:has(#modal.on) .toasts{bottom:auto;top:calc(14px + env(safe-area-inset-top)
   .ks-chip input{width:96px}
 }
 @media (orientation:landscape) and (max-height:520px){ .ks-tiles .ks-tile{min-height:44px;padding:4px} .ks-tile b{font-size:16px} }
+.ks-r.ro{cursor:default;opacity:.8}
+.ks-x{border-style:dashed!important;color:var(--muted)!important;background:transparent!important}
+span.ks-gcb{display:inline-block}

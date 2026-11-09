@@ -41,6 +41,10 @@ eq(S.docSo('30m'), 30, 'số kèm đơn vị m');
 eq(S.docSo('14 đèn ( 2TN 3m)'), null, 'chữ tự do → trống, không đoán');
 eq(S.docSo(''), null, 'ô trống → trống (không phải 0)');
 eq(S.docSo('abc'), null, 'không phải số → trống');
+eq(S.docSo('1.234'), 1234, '"1.234" kiểu VN = một nghìn hai trăm ba mươi tư');
+eq(S.docSo('1.234.567'), 1234567, 'nhiều nhóm nghìn');
+eq(S.docSo('1.234,5'), 1234.5, 'nghìn + thập phân');
+eq(S.docSo('1.5'), 1.5, '"1.5" thập phân');
 
 // ---------- 2. Ánh xạ bản ghi (T1) ----------
 {
@@ -75,6 +79,8 @@ eq(S.docSo('abc'), null, 'không phải số → trống');
   eq(S.goiTheoPhuong(st, 'Phường Bàn Cờ'), { goi: 'G1', list: ['G1'] }, 'bỏ tiền tố "Phường"');
   eq(S.goiTheoPhuong(st, 'Xuân Hòa'), { goi: 'nhieu', list: ['G1', 'G2'] }, 'nhiều gói → chọn tay');
   eq(S.goiTheoPhuong(st, 'Tân Định'), { goi: null, list: [] }, 'phường lạ → chưa rõ gói');
+  eq(S.goiTheoPhuong(st, 'P.Bàn Cờ'), { goi: 'G1', list: ['G1'] }, '"P.Bàn Cờ" không dấu cách');
+  eq(S.goiTheoPhuong(st, 'P Bàn Cờ').goi, 'G1', '"P Bàn Cờ"');
 }
 
 // ---------- 4. Xem trước + lấy về phụ lục nháp (T2, T4) ----------
@@ -122,7 +128,10 @@ eq(S.docSo('abc'), null, 'không phải số → trống');
   // Vị trí đã thực hiện → không ghi đè KL
   v.trangThai = 'da';
   const xt3 = S.xemTruoc(st, [TRU({ 'Số lượng': 9 })], { namKH: 2026 });
+  eq([xt3.items[0].trangThai, xt3.items[0].chon], ['thayDoi', false], 'vị trí đã thực hiện: thay đổi KS không chọn sẵn');
+  xt3.items[0].chon = true;
   S.apDung(st, xt3.items, { namKH: 2026 });
+  eq(S.xemTruoc(st, [TRU({ 'Số lượng': 9 })], { namKH: 2026 }).items[0].trangThai, 'daCo', 'đã ghi nhận thay đổi → lần sau không hiện lại');
   eq([v.kl, v.nguon.doiSauTH], [6, true], 'đã thực hiện: giữ KL, đánh dấu "khảo sát đổi sau khi thực hiện"');
   // Bản KS bị xoá sau khi lấy → đánh dấu, không xoá vị trí
   const xt4 = S.xemTruoc(st, [TRU({ STT: 'TT-261105-0004', 'Deleted At': '2026-11-09' })], { namKH: 2026 });
@@ -150,6 +159,29 @@ eq(S.docSo('abc'), null, 'không phải số → trống');
   st.viTri.find((v) => v.plId === pl.id).kl = null;
   eq(S.kiemXuat(st, [pl.id]).length, 1, 'xuất bị chặn khi có vị trí KL trống');
   eq(S.kiemXuat(st, st.phuLuc.filter((p) => p.nhap).map((p) => p.id)).length > 0, true, 'phụ lục nháp không xuất được');
+}
+
+// ---------- 5b. Thay đổi sau khi đã vào đợt thật; STT trùng bản xoá; Nhập đã thực hiện bỏ qua nháp ----------
+{
+  const st = kho();
+  S.apDung(st, S.xemTruoc(st, [TRU()], { namKH: 2026 }).items, { namKH: 2026 });
+  const v = st.viTri.find((x) => x.nguon?.ks);
+  S.xacNhanThuocSo(st, [v.id], true); S.chuyenNhap(st, [v.id], { dot: 'Đợt 3' });
+  const it = S.xemTruoc(st, [TRU({ 'Ghi chú (kèm thay cần đèn,...)': 'đổi ghi chú' })], { namKH: 2026 }).items[0];
+  eq([it.trangThai, it.daVaoDot, it.chon], ['thayDoi', true, false], 'đã vào đợt thật: thay đổi không chọn sẵn');
+  it.chon = true; S.apDung(st, [it], { namKH: 2026 });
+  eq(v.nguon.thuocSo, true, 'cập nhật từ KS giữ xác nhận thuộc Sở');
+  const pl = st.phuLuc.find((p) => p.id === v.plId);
+  eq(S.kiemXuat(st, [pl.id]), [], 'vẫn xuất được sau khi cập nhật');
+  const x = S.xemTruoc(st, [TRU({ STT: 'TT-9' }), TRU({ STT: 'TT-9', 'Deleted At': '2026-11-01', 'Tuyến đường': 'Cũ' })], { namKH: 2026 });
+  eq(x.items.map((i) => i.trangThai), ['moi'], 'STT trùng giữa bản xoá và bản hiệu lực: chỉ giữ bản hiệu lực');
+  // Nhập đã thực hiện: vị trí trùng ở nháp và phụ lục thật → khớp phụ lục thật
+  const st2 = kho();
+  S.apDung(st2, S.xemTruoc(st2, [TRU({ STT: 'TT-7', 'Tuyến đường': 'NTMK', 'Tủ điều khiển': 'TĐK X', Phường: 'Bàn Cờ' })], { namKH: 2026 }).items.map((i) => ({ ...i, chon: true, trangThai: 'moi' })), { namKH: 2026 });
+  const kq = K.khopThucHien(st2, { loai: 'PLIII', viTri: [{ tram: 'TĐK X', phuong: 'Phường Bàn Cờ', tuyen: 'NTMK', kl: 2 }] }, '2026-10');
+  eq(st2.viTri.find((x) => x.id === 'v2').trangThai, 'da', 'khớp vào vị trí phụ lục thật');
+  eq(st2.viTri.find((x) => x.nguon?.ks === 'thay_tru#TT-7').trangThai, 'chua', 'không khớp vào vị trí nháp');
+  void kq;
 }
 
 // ---------- 6. Tóm tắt đẩy sang app Khảo sát (T6) ----------

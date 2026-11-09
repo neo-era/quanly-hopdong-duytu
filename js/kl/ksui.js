@@ -71,18 +71,20 @@ export function moLayKS(c) {
     .filter((it) => !L.phuong || c.norm(it.vt.phuong).includes(c.norm(L.phuong)))
     .filter((it) => !L.loc || (L.loc === 'thieuKL' ? it.thieuKL : it.trangThai === L.loc));
   const goiCua = (it) => L.chonGoi[it.key] || (it.goi && it.goi !== 'nhieu' ? it.goi : '');
-  const chon = () => (L.xt?.items || []).filter((it) => it.chon);
+  const chonDuoc = (it) => !['trungPL', 'sttTrung', 'daCo'].includes(it.trangThai);
+  const chon = () => hien().filter((it) => it.chon && chonDuoc(it));
 
   const rowHTML = (it) => {
     const [pc, pt] = PILL[it.trangThai] || ['', ''];
     const g = goiCua(it);
     const canGoi = !g || it.goi === 'nhieu';
-    return `<div class="ks-r ${it.chon ? 'on' : ''}" data-k="${esc(it.key)}" role="checkbox" aria-checked="${it.chon}" tabindex="0">
-      <span class="chk ${it.chon ? '' : 'off'}" aria-hidden="true">${it.chon ? '✓' : ''}</span>
+    const cd = chonDuoc(it);
+    return `<div class="ks-r ${it.chon && cd ? 'on' : ''} ${cd ? '' : 'ro'}" ${cd ? `data-k="${esc(it.key)}" role="checkbox" aria-checked="${it.chon}" tabindex="0"` : ''}>
+      ${cd ? `<span class="chk ${it.chon ? '' : 'off'}" aria-hidden="true">${it.chon ? '✓' : ''}</span>` : '<span class="chk off ks-x" aria-hidden="true">–</span>'}
       <div class="m"><div class="t">${esc(it.stt)} · ${esc(it.vt.tuyen || '—')}</div>
         <div class="kl-sub">${esc(it.vt.phuong || '—')} · ${esc(it.vt.tram || '—')}${it.vt.lyTrinhDau ? ' · ' + esc(it.vt.lyTrinhDau) : ''}</div></div>
       <div class="k"><b class="n">${it.vt.kl === null ? '—' : fmt(it.vt.kl)}</b> <span class="kl-sub">${esc(it.dvt || '')}</span>
-        <div class="ks-pills">${pt ? `<span class="ks-pill ${pc}">${pt}</span>` : ''}${it.thieuKL ? `<span class="ks-pill bad">${it.dich === 'PLII' ? 'KL J nhập sau' : 'Thiếu KL'}</span>` : ''}${it.goiYPLIV ? '<span class="ks-pill chg">Trang trí?</span>' : ''}</div></div>
+        <div class="ks-pills">${pt ? `<span class="ks-pill ${pc}">${pt}</span>` : ''}${it.thieuKL ? `<span class="ks-pill bad">${it.dich === 'PLII' ? 'KL J nhập sau' : 'Thiếu KL'}</span>` : ''}${it.goiYPLIV ? '<span class="ks-pill chg">Trang trí?</span>' : ''}${it.daVaoDot ? '<span class="ks-pill chg">Đã vào đợt — xem kỹ</span>' : ''}</div></div>
       ${canGoi ? `<select class="ks-goi" data-goi="${esc(it.key)}" aria-label="Chọn gói cho ${esc(it.stt)}"><option value="">${it.goi === 'nhieu' ? 'Nhiều gói – chọn' : 'Chưa rõ gói'}</option>${(it.goiList.length ? it.goiList : goiAll).map((x) => `<option value="${x}" ${g === x ? 'selected' : ''}>${goiTen(x)}</option>`).join('')}</select>`
         : `<span class="ks-g">${goiTen(g)}</span>`}
       <button class="ks-i" data-ct="${esc(it.key)}" aria-label="Chi tiết ${esc(it.stt)}" aria-expanded="${L.chiTiet === it.key}">ⓘ</button>
@@ -94,7 +96,7 @@ export function moLayKS(c) {
       ${it.vt.hienHuu !== undefined ? `<span>Đèn hiện hữu (cột G)</span><b>${fmt(it.vt.hienHuu)}</b>` : ''}${it.vt.namLD ? `<span>Năm lắp đặt</span><b>${esc(it.vt.namLD)}</b>` : ''}
       ${it.vt.ghiChu ? `<span>Ghi chú</span><b>${esc(it.vt.ghiChu)}</b>` : ''}<span>Thuộc Sở</span><b>chưa xác minh — xác nhận ở tab Vị trí trước khi chuyển đợt</b></div>
     ${it.type === 'thay_tru' ? `<label class="kl-chk ks-44"><input type="checkbox" data-pliv="${esc(it.key)}" ${L.chonDich[it.key] === 'PLIV' ? 'checked' : ''}> Đưa vào PL IV (trụ trang trí)</label>` : ''}
-    ${it.vt.link ? `<a class="btn ghost sm" href="${esc(it.vt.link)}" target="_blank" rel="noopener">Mở bản đồ</a>` : ''}</div>`;
+    ${/^https?:\/\//i.test(it.vt.link || '') ? `<a class="btn ghost sm" href="${esc(it.vt.link)}" target="_blank" rel="noopener">Mở bản đồ</a>` : ''}</div>`;
 
   const body = () => {
     if (!L.xt) {
@@ -122,12 +124,13 @@ export function moLayKS(c) {
       <div class="ks-tiles">${tile('moi', d.moi, 'mới', 'g')}${tile('thayDoi', d.thayDoi, 'thay đổi', 'y')}${tile('trungPL', d.trungPL, 'trùng PL', '')}${tile('thieuKL', d.thieuKL, 'thiếu KL', 'r')}</div>
       ${daCo ? `<p class="muted">${fmt(daCo, 0)} bản đã lấy trước đây, không đổi — ẩn.</p>` : ''}
       ${groups.length ? groups.map(([g, t, a]) => {
-        const nOn = a.filter((x) => x.chon).length;
+        const sel = a.filter(chonDuoc);
+        const nOn = sel.filter((x) => x.chon).length;
         const open = L.mo.has(g);
         const lim = L.trang[g] || PAGE;
         return `<section class="ks-grp"><div class="ks-gh">
-          <input type="checkbox" class="ks-gcb" data-gall="${g}" ${nOn === a.length ? 'checked' : ''} data-ind="${nOn > 0 && nOn < a.length ? 1 : 0}" aria-label="Chọn cả nhóm ${esc(t)}">
-          <button class="ks-gt" data-mo="${g}" aria-expanded="${open}"><b>${esc(t)}</b><span class="kl-sub">${nOn}/${a.length} · ${fmt(a.reduce((s, x) => s + (+x.vt.kl || 0), 0))}</span><span aria-hidden="true">${open ? '▾' : '▸'}</span></button></div>
+          ${sel.length ? `<input type="checkbox" class="ks-gcb" data-gall="${g}" ${nOn === sel.length ? 'checked' : ''} data-ind="${nOn > 0 && nOn < sel.length ? 1 : 0}" aria-label="Chọn cả nhóm ${esc(t)}">` : '<span class="ks-gcb" aria-hidden="true"></span>'}
+          <button class="ks-gt" data-mo="${g}" aria-expanded="${open}"><b>${esc(t)}</b><span class="kl-sub">${sel.length ? `${nOn}/${sel.length}` : 'không thêm'} · ${fmt(a.reduce((s, x) => s + (+x.vt.kl || 0), 0))}</span><span aria-hidden="true">${open ? '▾' : '▸'}</span></button></div>
           ${open ? a.slice(0, lim).map(rowHTML).join('') + (a.length > lim ? `<button class="btn ghost ks-w" data-trang="${g}">Hiện thêm ${fmt(Math.min(PAGE, a.length - lim), 0)} / còn ${fmt(a.length - lim, 0)}</button>` : '') : ''}</section>`;
       }).join('') : '<div class="kl-empty"><h3>Không có bản ghi trong khoảng đã lọc</h3></div>'}`;
   };
@@ -157,7 +160,7 @@ export function moLayKS(c) {
         } catch (e) { L.tienDo = ''; L.loi = { _: e.message }; }
         L.tai = false; paint();
       };
-      const toggle = (key) => { const it = L.xt.items.find((x) => x.key === key); if (it) { it.chon = !it.chon; paint(); host.querySelector(`[data-k="${CSS.escape(key)}"]`)?.focus(); } };
+      const toggle = (key) => { const it = L.xt.items.find((x) => x.key === key && chonDuoc(x)); if (it) { it.chon = !it.chon; paint(); host.querySelector(`[data-k="${CSS.escape(key)}"]`)?.focus(); } };
       el.addEventListener('click', async (e) => {
         const t = e.target;
         if (t.closest('[data-x]')) return;
@@ -187,7 +190,7 @@ export function moLayKS(c) {
         if (t.dataset.nam !== undefined) L.namKH = +t.value;
         if (t.dataset.goi) { L.chonGoi[t.dataset.goi] = t.value; const it = L.xt.items.find((x) => x.key === t.dataset.goi); if (it && t.value) it.chon = true; return paint(); }
         if (t.dataset.pliv) { t.checked ? (L.chonDich[t.dataset.pliv] = 'PLIV') : delete L.chonDich[t.dataset.pliv]; return paint(); }
-        if (t.dataset.gall) { const on = t.checked; hien().filter((it) => nhomCua(it) === t.dataset.gall).forEach((it) => { it.chon = on; }); return paint(); }
+        if (t.dataset.gall) { const on = t.checked; hien().filter((it) => nhomCua(it) === t.dataset.gall && chonDuoc(it)).forEach((it) => { it.chon = on; }); return paint(); }
       });
       let ph = 0;
       el.addEventListener('input', (e) => { if (e.target.dataset.ph === undefined) return; clearTimeout(ph); const v = e.target.value; ph = setTimeout(() => { L.phuong = v; if (L.xt) { paint(); const i = host.querySelector('[data-ph]'); if (i) { i.focus(); i.setSelectionRange(v.length, v.length); } } }, 250); });
@@ -222,13 +225,15 @@ export function moDay(c) {
         const err = h.querySelector('[data-err]');
         b.disabled = true; b.textContent = 'Đang gửi…'; err.textContent = '';
         const data = KS.tomTat(S, y);
-        const meta = { source_file_id: api.getData().updatedAt || 'qlhd', generated_at: new Date().toISOString() };
+        // Mốc dữ liệu = lần sửa cuối của bản HĐ đang mở (không phải lúc bấm nút) → máy mở bản cũ không đè được bản mới
+        const upd = api.getData().updatedAt;
+        const meta = { source_file_id: 'qlhd', generated_at: upd || new Date().toISOString() };
         try {
           let r;
           try { r = await ksPush(data, meta); }
           catch (x) {
             if (!/cũ hơn/.test(x.message)) throw x;
-            if (!(await confirmBox(x.message + ' Vẫn ghi đè bằng dữ liệu đang mở?', 'Ghi đè'))) return;
+            if (!(await confirmBox(x.message + ' Vẫn ghi đè bằng dữ liệu đang mở?', 'Ghi đè'))) { api.toast('Đã huỷ, không đẩy.', 'ok'); return; }
             r = await ksPush(data, meta, { force: true });
           }
           close(); api.toast(`Đã đẩy sang app Khảo sát (bản ${r.version}).`, 'ok');

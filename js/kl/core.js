@@ -185,7 +185,8 @@ export function viTriCuaHM(st, ma, goi, nam, { phan = 'ld' } = {}) {
  * Dòng không khớp được liệt kê, không ghi. apply=false để xem trước.
  */
 export function khopThucHien(st, r, thang, { apply = true } = {}) {
-  const ids = new Set(st.phuLuc.filter((p) => p.loai === r.loai).map((p) => p.id));
+  // Không khớp vào phụ lục nháp (đề xuất từ app Khảo sát) — chỉ phụ lục thật
+  const ids = new Set(st.phuLuc.filter((p) => p.loai === r.loai && !p.nhap).map((p) => p.id));
   const pool = new Map();
   for (const v of st.viTri) if (ids.has(v.plId)) { const k = keyVT(v); if (!pool.has(k)) pool.set(k, []); pool.get(k).push(v); }
   const used = new Set();

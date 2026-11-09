@@ -29,8 +29,11 @@ Hai app cùng origin `neo-era.github.io`. Dữ liệu HĐ ở Drive riêng → c
 | `hkn` | Khác | — | "Số lượng" (hộp) |
 | `thay_can`, `choa_den`, `nap_tru`, `decal_so_tru`, `tc_den_kc_xa` | Khác | — | "Số lượng" (cái/bộ theo loại) |
 | `nang_mong` | Khác | — | "Số lượng" (trụ); "Độ cao nâng" là mm, **không phải KL** |
-| `tang_cuong_den`, `ngam_hoa` | **Mặc định không lấy** (lắp mới/ngầm hoá, nhiều khả năng ngoài HĐ duy tu); bật được trong cài đặt | — | "Số đèn dự kiến" |
-| `thao_go_bang_ron`, `bao_cao_su_co` | **Không lấy** | — | — |
+| `tang_cuong_den`, `ngam_hoa` | Khác | — | "Số đèn dự kiến" (bộ) |
+| `thao_go_bang_ron` | Khác (không cần cột TĐK) | "Vị trí" → lý trình; "Loại quảng cáo" → ghi chú | "Số lượng" (tấm) |
+| `bao_cao_su_co` | Khác | "Mã tủ", "Hiện trạng sự cố", "Đề xuất khắc phục" → ghi chú | **trống** — người dùng nhập theo mã HM |
+
+> Anh chốt 09/11/2026: **mọi hạng mục khảo sát đều có hạng mục hợp đồng duy tu** → lấy đủ 17 loại; thanh "Hợp đồng" hiện ở cả 17 form khảo sát.
 
    - Ô KL trống / không phải số → **KL = trống** (không ghi 0), vị trí bị **chặn xuất phụ lục và không cộng vào đối chiếu** cho đến khi có số. Số dạng "1,5" đọc đúng. Thiếu cột → báo lỗi rõ.
    - Toạ độ: lấy lat/lng nếu có, nếu không giữ "Link Google Map".
@@ -94,7 +97,7 @@ Hai app cùng origin `neo-era.github.io`. Dữ liệu HĐ ở Drive riêng → c
 
 ## 5. Còn chờ anh (không chặn làm)
 - PL IV có dùng cho KVTT không (mặc định: chỉ khi chọn tay).
-- `tang_cuong_den`, `ngam_hoa` có thuộc HĐ duy tu không (mặc định: không lấy).
+- ~~`tang_cuong_den`, `ngam_hoa` có thuộc HĐ duy tu không~~ → anh chốt 09/11: mọi loại khảo sát đều có hạng mục HĐ.
 - Tài khoản Google chủ Apps Script để triển khai bản mới.
 
 ## Nhật ký duyệt
@@ -104,3 +107,4 @@ Hai app cùng origin `neo-era.github.io`. Dữ liệu HĐ ở Drive riêng → c
 | 09/11/2026 | Bước 0 | Apps Script/PWA bảo mật | Duyệt có điều kiện | token phạm vi `hd` 30 ngày; chống chèn công thức; ghi nguyên tử bằng con trỏ; tryLock + trần payload; chống đẩy đè; khoá theo tiêu đề cột thật; tương thích ngược + READ_ACTIONS; không trả stack, allowlist; hash thay đổi; test chặn mạng |
 | 09/11/2026 | Q2 | Anh | Mọi tài khoản trừ demo xem KL HĐ | Không nhận góp ý "chỉ manage xem KL"; thay bằng ghi chú "nhập đúng số hiện trường" trên thẻ |
 | 09/11/2026 | Chốt UI | UX/UI mobile | Chọn **B** cho cả hai app (KS: thanh chip dính trên nút Lưu + bottom sheet; HĐ: thống kê + nhóm theo đích, ghép bộ lọc chip của A, thẻ chi tiết của C khi chạm dòng) | Bỏ so sánh "số đang nhập > còn lại", chip KL màu trung tính; thanh ≥48px, chữ ≥14px tương phản cao; cao cố định mọi trạng thái; ẩn khi bàn phím mở; pill ≥12px/24px; chạm cả dòng; checkbox nhóm 3 trạng thái; token màu sáng (#15803d/#a16207/#b91c1c); ô thống kê lọc được; phân trang >50 dòng/nhóm; giữ bộ lọc ở màn ngang; trạng thái tải/lỗi/rỗng theo từng loại; footer ghi "không cộng vào Đã đưa vào KH" |
+| 09/11/2026 | Phạm vi | Anh | Mọi hạng mục khảo sát đều có hạng mục HĐ duy tu | Lấy đủ 17 loại (thêm tăng cường đèn, ngầm hóa, băng rôn, sự cố vào nhóm Khác); thanh HĐ hiện ở mọi form |

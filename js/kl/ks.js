@@ -29,8 +29,12 @@ export const KS_MAP = {
   decal_so_tru: { ten: 'Decal số trụ', dich: 'KHAC', kl: 'Số lượng', dau: 'Vị trí', dvt: 'cái' },
   tc_den_kc_xa: { ten: 'Tăng cường đèn KC xa', dich: 'KHAC', kl: 'Số lượng', dau: 'Vị trí', them: ['Chủng loại đèn'], dvt: 'bộ' },
   nang_mong:    { ten: 'Nâng móng trụ', dich: 'KHAC', kl: 'Số lượng', dau: 'Vị trí', them: ['Quy cách móng'], dvt: 'trụ' },
-  tang_cuong_den: { ten: 'Tăng cường đèn', dich: 'KHAC', kl: 'Số đèn dự kiến', dau: 'Đầu tuyến', cuoi: 'Cuối tuyến', dvt: 'bộ', tat: true },
-  ngam_hoa:     { ten: 'Ngầm hóa', dich: 'KHAC', kl: 'Số đèn dự kiến', dau: 'Đầu tuyến', cuoi: 'Cuối tuyến', dvt: 'bộ', tat: true },
+  // Anh chốt 09/11/2026: mọi hạng mục khảo sát đều có hạng mục hợp đồng duy tu tương ứng → lấy cả 17 loại
+  tang_cuong_den: { ten: 'Tăng cường đèn', dich: 'KHAC', kl: 'Số đèn dự kiến', dau: 'Đầu tuyến', cuoi: 'Cuối tuyến', dvt: 'bộ' },
+  ngam_hoa:     { ten: 'Ngầm hóa', dich: 'KHAC', kl: 'Số đèn dự kiến', dau: 'Đầu tuyến', cuoi: 'Cuối tuyến', dvt: 'bộ' },
+  thao_go_bang_ron: { ten: 'Tháo gỡ băng rôn', dich: 'KHAC', kl: 'Số lượng', dau: 'Vị trí', them: ['Loại quảng cáo'], dvt: 'tấm', khongTDK: true },
+  // Báo cáo sự cố không có cột số lượng → KL để trống, người dùng nhập theo mã HM
+  bao_cao_su_co: { ten: 'Báo cáo sự cố', dich: 'KHAC', kl: null, them: ['Mã tủ', 'Hiện trạng sự cố', 'Đề xuất khắc phục'], dvt: 'lần' },
 };
 export const LOAI_KHAC = 'KHAC';
 export const TEN_DICH = { ...LOAI_TEN, KHAC: 'Khác (ngoài phụ lục)' };
@@ -66,7 +70,7 @@ export function anhXa(row, opts = {}) {
   const type = row?._type;
   const M = KS_MAP[type];
   if (!M || (M.tat && !(opts.layThem || []).includes(type))) return null;
-  const need = ['STT', 'Tuyến đường', 'Phường', 'Tủ điều khiển'].concat(M.kl ? [M.kl] : [], M.hienHuu ? [M.hienHuu] : []);
+  const need = ['STT', 'Tuyến đường', 'Phường'].concat(M.khongTDK ? [] : ['Tủ điều khiển'], M.kl ? [M.kl] : [], M.hienHuu ? [M.hienHuu] : []);
   const thieu = need.filter((h) => !(h in row));
   if (thieu.length) throw new Error(`Thiếu cột "${thieu.join('", "')}" ở loại ${M.ten} — kiểm tra lại sheet khảo sát`);
   const stt = txt(row.STT);

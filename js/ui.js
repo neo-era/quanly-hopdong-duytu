@@ -391,7 +391,7 @@ export function bindEvents() {
   document.body.addEventListener('click', async (e) => {
     const id = e.target.id;
     if (id === 'btnSignin') { try { await D.signIn(); toast('Đã đăng nhập Google.', 'ok'); await reloadFromDrive(); } catch (err) { toast(err.message, 'err'); } }
-    if (id === 'btnSignout') { D.signOut(); toast('Đã đăng xuất.'); render(); }
+    if (id === 'btnSignout') { D.signOut(); import('./kl/ksapi.js').then((m) => m.ksUnlink()).catch(() => {}); toast('Đã đăng xuất.'); render(); }
     if (id === 'btnSave') return doSave();
     if (id === 'btnReload') return reloadFromDrive();
     if (id === 'btnAddHd') return openForm('Thêm hợp đồng', F.hd, { loaiHD: 'goi-duy-tu' }, async (vals) => {

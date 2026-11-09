@@ -112,3 +112,7 @@ export function markSaved(modifiedTime) {
 // Tiện ích: lấy / sửa 1 HĐ
 export function getContract(id) { return state.data.contracts.find(c => c.id === id); }
 export function uid(prefix = 'id') { return prefix + '-' + Math.random().toString(36).slice(2, 9); }
+
+/** Khoá/giá trị phụ trong cùng IndexedDB (vd token liên kết app Khảo sát). Lỗi → undefined/false, không ném. */
+export const kvGet = (key) => idbGet(key);
+export const kvSet = (key, val) => idbSet(key, val);

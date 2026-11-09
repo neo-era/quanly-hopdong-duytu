@@ -2,6 +2,7 @@
 // Tiêu chí: docs/04_LienKet-KhaoSat.md (T1–T6, B3, B5). Chạy: node tests/ks.test.js — dữ liệu giả lập, không gọi mạng.
 import * as K from '../js/kl/core.js';
 import * as S from '../js/kl/ks.js';
+import * as MA from '../js/kl/ksma.js';
 
 let pass = 0, fail = 0;
 const eq = (g, w, m) => { if (JSON.stringify(g) === JSON.stringify(w)) pass++; else { fail++; console.error(`✗ ${m}\n   nhận: ${JSON.stringify(g)}\n   mong: ${JSON.stringify(w)}`); } };
@@ -219,6 +220,47 @@ eq(S.docSo('1.5'), 1.5, '"1.5" thập phân');
   eq(S.apMauKS(st, 'tc_ngam'), 1, 'áp lại mẫu Khác');
   eq(v.chiTiet, [{ ma: 'HM300', kl: 40 }, { ma: 'HM301', kl: 20 }], 'chi tiết mới');
   eq(K.LOAI_TEN.KHAC, 'Khác · ngoài phụ lục', 'tên nhóm Khác');
+}
+
+// ---------- 8. Mặc định mã HM theo danh mục HĐ (tên hạng mục thật của bảng giá ký 2026–2029) ----------
+{
+  const CAT = { HM283: { dvt: '1 Trụ' }, HM286: { dvt: '1 Trụ' }, HM280: { dvt: '1 Trụ' }, HM278: { dvt: 'cột' }, HM290: { dvt: '1 Trụ' }, HM287: { dvt: '1 Trụ' },
+    HM131: { dvt: '1 tủ' }, HM347: { dvt: '40m' }, HM346: { dvt: '100m' }, HM346m: { dvt: 'm' }, HM330: { dvt: '100m' }, HM331: { dvt: '100m' }, HM099: { dvt: 'hộp' },
+    HM305: { dvt: 'cần đèn' }, HM311: { dvt: 'cần đèn' }, HM310: { dvt: 'cần đèn' }, HM091: { dvt: 'bộ' }, HM103: { dvt: 'bộ' }, HM093: { dvt: 'bộ' },
+    HM254: { dvt: 'bộ' }, HM423: { dvt: 'bộ' }, HM246: { dvt: '1 cái' }, HM244: { dvt: 'móng' }, HM433: { dvt: 'bộ' }, HM189: { dvt: 'bộ' } };
+  const g = (t, qc, kl = 1, cat = CAT) => MA.goiYMa(t, { qc }, kl, cat);
+  eq([g('thay_tru', 'STK 9m').ma, g('thay_tru', 'Thép 6m').ma, g('thay_tru', 'STK 12m').ma], ['HM286', 'HM283', 'HM280'], 'trụ thép theo chiều cao');
+  eq([g('thay_tru', 'Bê tông 8,4m').ma, g('thay_tru', 'trang trí đế gang').ma, g('thay_tru', 'trang trí').chac], ['HM278', 'HM287', false], 'trụ BTLT / trang trí; trang trí chung → chưa chắc');
+  eq(g('thay_tru', ''), null, 'không có quy cách → không đoán');
+  eq([g('thay_tru', 'Côn tròn 8m', 1, { ...CAT, HM285: { dvt: '1 Trụ' } }).ma, g('thay_tru', 'Côn tròn 8m', 1, { ...CAT, HM285: { dvt: '1 Trụ' } }).chac], ['HM285', true], 'danh mục app KS "Côn tròn 8m" → HM285');
+  eq(g('thay_can', '2,5m').ma, 'HM310', 'danh mục app KS "2,5m" → HM310');
+  eq(g('choa_den', 'Đèn LED'), null, 'chóa "Đèn LED" → không đoán');
+  eq([g('vo_tu').ma, g('decal_so_tru').ma, g('nang_mong').ma, g('thao_go_bang_ron').ma], ['HM131', 'HM246', 'HM244', 'HM433'], 'vỏ tủ / decal / nâng móng / băng rôn');
+  eq(g('tc_noi', '', 80).chiTiet, [{ ma: 'HM347', kl: 2 }], 'cáp nổi 80m → HM347 (ĐVT 40m) = 2');
+  eq(g('tc_ngam', '', 30).chiTiet, [{ ma: 'HM346m', kl: 30 }], 'cáp ngầm → HM346m (m)');
+  eq(MA.goiYMa('tc_ngam', {}, 250, { HM346: { dvt: '100m' } }).chiTiet, [{ ma: 'HM346', kl: 2.5 }], 'không có HM346m → HM346 (100m)');
+  eq([g('cap_luon_can', '5x2,5').ma, g('cap_luon_can', '').ma, g('cap_luon_can', '').chac], ['HM331', 'HM330', false], 'cáp luồn cần = dây lên đèn');
+  eq([g('hkn', '6A').ma, g('hkn', '6A').chac], ['HM099', false], 'hộp kín nước: mặc định rẽ nhánh, cần xem lại');
+  eq([g('thay_can', 'cần đôi').ma, g('thay_can', '3,8m').ma, g('thay_can', '3m').ma], ['HM305', 'HM311', 'HM310'], 'cần đèn theo kiểu/chiều dài');
+  eq([g('choa_den', 'Onyx').ma, g('choa_den', 'Trang trí Bông huệ').ma, g('choa_den', 'pha').ma], ['HM091', 'HM103', 'HM093'], 'chóa đèn theo loại');
+  eq([g('nap_tru', '35x25').ma, g('nap_tru', 'composite').ma], ['HM254', 'HM423'], 'nắp trụ thép / composite');
+  eq(g('tc_den_kc_xa', 'LED 120W').ma, 'HM189', 'đèn LED 120W → HM189 (120–<130W)');
+  eq([g('bao_cao_su_co'), g('ngam_hoa')], [null, null], 'sự cố / ngầm hóa: không có mã mặc định');
+  eq(MA.goiYMa('vo_tu', {}, 1, {}), null, 'mã không có trong danh mục HĐ → không gán');
+  // tích hợp: kho chưa khai mẫu Khác → gán theo mã danh mục; có mẫu → theo mẫu
+  const st = kho(); Object.assign(st.catalog, CAT); st.mau.PLIII = [];
+  const xt = S.xemTruoc(st, [TRU(), { _type: 'tc_noi', STT: 'TCN-1', 'Tuyến đường': 'A', Phường: 'Bàn Cờ', 'Tủ điều khiển': 'T', 'Số lượng': 120, 'Loại cáp hiện hữu': '5x10' }], { namKH: 2026 });
+  eq(xt.items.map((i) => i.goiY?.ma), ['HM286', 'HM347'], 'xem trước hiện mã gợi ý');
+  S.apDung(st, xt.items, { namKH: 2026 });
+  eq(st.viTri.find((v) => v.nguon?.ks === 'thay_tru#TT-261105-AB12').chiTiet, [{ ma: 'HM286', kl: 6 }], 'trụ STK 9m × 6 → HM286 × 6');
+  eq(st.viTri.find((v) => v.nguon?.ks === 'tc_noi#TCN-1').chiTiet, [{ ma: 'HM347', kl: 3 }], 'cáp nổi 120m → HM347 × 3');
+  st.mau['KS:tc_noi'] = [{ ma: 'HM347', heSo: 0.025 }, { ma: 'HM099', heSo: 0 }];
+  S.apMauKS(st, 'tc_noi');
+  eq(st.viTri.find((v) => v.nguon?.ks === 'tc_noi#TCN-1').chiTiet, [{ ma: 'HM347', kl: 3 }, { ma: 'HM099', kl: 0 }], 'Áp mẫu → theo mẫu người dùng khai');
+  eq(S.tomTat(st, 2026).loaiHM.filter((r) => r[0] === 'vo_tu').map((r) => r[1]), ['HM131'], 'đẩy sang KS: loại chưa có mẫu → mã mặc định có trong danh mục');
+  const st2 = kho(); Object.assign(st2.catalog, CAT);
+  S.apDung(st2, S.xemTruoc(st2, [TRU()], { namKH: 2026 }).items, { namKH: 2026 });
+  eq(st2.viTri.find((v) => v.nguon?.ks).chiTiet, [{ ma: 'HM210', kl: 6 }, { ma: 'HM214', kl: 6 }], 'đã có mẫu PL III → theo mẫu, không đè');
 }
 
 console.log(`\nks.test: ${pass} đạt, ${fail} lỗi`);

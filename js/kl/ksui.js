@@ -82,7 +82,8 @@ export function moLayKS(c) {
     return `<div class="ks-r ${it.chon && cd ? 'on' : ''} ${cd ? '' : 'ro'}" ${cd ? `data-k="${esc(it.key)}" role="checkbox" aria-checked="${it.chon}" tabindex="0"` : ''}>
       ${cd ? `<span class="chk ${it.chon ? '' : 'off'}" aria-hidden="true">${it.chon ? '✓' : ''}</span>` : '<span class="chk off ks-x" aria-hidden="true">–</span>'}
       <div class="m"><div class="t">${esc(it.stt)} · ${esc(it.vt.tuyen || '—')}</div>
-        <div class="kl-sub">${esc(it.vt.phuong || '—')} · ${esc(it.vt.tram || '—')}${it.vt.lyTrinhDau ? ' · ' + esc(it.vt.lyTrinhDau) : ''}</div></div>
+        <div class="kl-sub">${esc(it.vt.phuong || '—')} · ${esc(it.vt.tram || '—')}${it.vt.lyTrinhDau ? ' · ' + esc(it.vt.lyTrinhDau) : ''}</div>
+        <div class="ks-ma">${it.coMau ? '<span class="kl-sub">theo mẫu chi tiết HM</span>' : it.goiY ? `<span class="kl-chip ${it.goiY.chac ? '' : 'ks-chua'}" title="${esc(it.goiY.ly)}">${esc(it.goiY.ma)}${it.goiY.chac ? '' : ' ?'}</span>` : '<span class="ks-pill bad">chưa có mã HM</span>'}</div></div>
       <div class="k"><b class="n">${it.vt.kl === null ? '—' : fmt(it.vt.kl)}</b> <span class="kl-sub">${esc(it.dvt || '')}</span>
         <div class="ks-pills">${pt ? `<span class="ks-pill ${pc}">${pt}</span>` : ''}${it.thieuKL ? `<span class="ks-pill bad">${it.dich === 'PLII' ? 'KL J nhập sau' : 'Thiếu KL'}</span>` : ''}${it.goiYPLIV ? '<span class="ks-pill chg">Trang trí?</span>' : ''}${it.daVaoDot ? '<span class="ks-pill chg">Đã vào đợt — xem kỹ</span>' : ''}</div></div>
       ${canGoi ? `<select class="ks-goi" data-goi="${esc(it.key)}" aria-label="Chọn gói cho ${esc(it.stt)}"><option value="">${it.goi === 'nhieu' ? 'Nhiều gói – chọn' : 'Chưa rõ gói'}</option>${(it.goiList.length ? it.goiList : goiAll).map((x) => `<option value="${x}" ${g === x ? 'selected' : ''}>${goiTen(x)}</option>`).join('')}</select>`
@@ -94,7 +95,8 @@ export function moLayKS(c) {
     <div class="kv"><span>Khảo sát</span><b>${esc(KS.KS_MAP[it.type]?.ten)} · ${esc(it.stt)}</b><span>Đích</span><b>${esc(KS.TEN_DICH[L.chonDich[it.key] || it.dich])}</b>
       <span>Trạm · tuyến</span><b>${esc(it.vt.tram)} · ${esc(it.vt.tuyen)}</b>${it.vt.lyTrinhDau ? `<span>Lý trình</span><b>${esc(it.vt.lyTrinhDau)}${it.vt.lyTrinhCuoi ? ' → ' + esc(it.vt.lyTrinhCuoi) : ''}</b>` : ''}
       ${it.vt.hienHuu !== undefined ? `<span>Đèn hiện hữu (cột G)</span><b>${fmt(it.vt.hienHuu)}</b>` : ''}${it.vt.namLD ? `<span>Năm lắp đặt</span><b>${esc(it.vt.namLD)}</b>` : ''}
-      ${it.vt.ghiChu ? `<span>Ghi chú</span><b>${esc(it.vt.ghiChu)}</b>` : ''}<span>Thuộc Sở</span><b>chưa xác minh — xác nhận ở tab Vị trí trước khi chuyển đợt</b></div>
+      ${it.vt.ghiChu ? `<span>Ghi chú</span><b>${esc(it.vt.ghiChu)}</b>` : ''}
+      <span>Mã HM</span><b>${it.coMau ? 'theo mẫu chi tiết HM đã khai' : it.goiY ? `${esc(it.goiY.ma)} · ${esc(c.st().catalog[it.goiY.ma]?.ten || '')} — ${esc(it.goiY.ly)}${it.goiY.chac ? '' : ' (cần xem lại)'}` : 'chưa xác định — gắn tay ở tab Vị trí hoặc khai mẫu'}</b><span>Thuộc Sở</span><b>chưa xác minh — xác nhận ở tab Vị trí trước khi chuyển đợt</b></div>
     ${it.type === 'thay_tru' ? `<label class="kl-chk ks-44"><input type="checkbox" data-pliv="${esc(it.key)}" ${L.chonDich[it.key] === 'PLIV' ? 'checked' : ''}> Đưa vào PL IV (trụ trang trí)</label>` : ''}
     ${/^https?:\/\//i.test(it.vt.link || '') ? `<a class="btn ghost sm" href="${esc(it.vt.link)}" target="_blank" rel="noopener">Mở bản đồ</a>` : ''}</div>`;
 

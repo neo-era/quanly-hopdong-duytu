@@ -3,6 +3,7 @@
 import * as K from '../js/kl/core.js';
 import * as S from '../js/kl/ks.js';
 import * as MA from '../js/kl/ksma.js';
+import * as N from '../js/kl/ksnhom.js';
 
 let pass = 0, fail = 0;
 const eq = (g, w, m) => { if (JSON.stringify(g) === JSON.stringify(w)) pass++; else { fail++; console.error(`✗ ${m}\n   nhận: ${JSON.stringify(g)}\n   mong: ${JSON.stringify(w)}`); } };
@@ -261,6 +262,113 @@ eq(S.docSo('1.5'), 1.5, '"1.5" thập phân');
   const st2 = kho(); Object.assign(st2.catalog, CAT);
   S.apDung(st2, S.xemTruoc(st2, [TRU()], { namKH: 2026 }).items, { namKH: 2026 });
   eq(st2.viTri.find((v) => v.nguon?.ks).chiTiet, [{ ma: 'HM210', kl: 6 }, { ma: 'HM214', kl: 6 }], 'đã có mẫu PL III → theo mẫu, không đè');
+}
+
+// ---------- 9. GĐ2: nhóm HM theo loại KS + mã người khảo sát chọn (docs/04 mục 6) ----------
+{
+  // Tên mẫu theo bảng giá ký 2026–2029 (chỉ tên, không số liệu)
+  const CAT = {
+    HM074: { ten: 'Thay thế bóng, chấn lưu, kích đèn HPS 70W', dvt: 'bộ', goi: { G1: {}, G2: {} } },
+    HM091: { ten: 'Thay thế chóa đèn HPS 70W-400W', dvt: 'bộ', goi: { G1: {} } },
+    HM186: { ten: 'Thay thế bộ đèn Led chiếu sáng đường phố', dvt: 'bộ', goi: { G1: {}, G2: {} } },
+    HM186_cg: { ten: 'Thay thế bộ đèn Led chiếu sáng đường phố', dvt: 'Bộ', goi: { G2: {} } },
+    HM187: { ten: 'Lắp đặt bộ đèn đường LED 100W-<110W', dvt: 'bộ', goi: { G1: {} } },
+    HM207: { ten: 'Tháo dỡ bộ đèn', dvt: 'bộ', goi: { G1: {} } },
+    HM240: { ten: 'Lắp đặt đế cố định trụ/cần/bộ đèn chiếu sáng bồn hoa/thảm cỏ', dvt: '1 cái', goi: { G1: {} } },
+    HM257: { ten: 'Lắp đặt trụ BTLT (không bao gồm móng trụ)', dvt: 'cột', goi: { G1: {} } },
+    HM286: { ten: 'Thay thế trụ đèn thép nhúng kẽm nóng cao ≤9m, dày 4mm', dvt: '1 Trụ', goi: { G1: {} } },
+    HM309: { ten: 'Thay thế cần đèn đơn Ø60mm', dvt: 'cần đèn', goi: { G1: {} } },
+    HM330: { ten: 'Thay thế dây lên đèn bằng cáp 3x2,5mm²', dvt: '100m', goi: { G1: {} } },
+    HM346: { ten: 'Thay thế cáp ngầm', dvt: '100m', goi: { G1: {}, G2: {}, G3: {} } },
+    HM346m: { ten: 'Thay thế cáp ngầm_', dvt: 'm', goi: { G4: {} } },
+    HM347: { ten: 'Thay thế cáp nguồn nổi', dvt: '40m', goi: { G1: {} } },
+    HM157: { ten: 'Cung cấp nối ống HDPE', dvt: 'cái', goi: { G1: {} } },
+    HM449: { ten: 'Thay thế MCCB 3P 50A có module đóng cắt điều khiển từ xa bằng mô tơ', dvt: 'cái', goi: { G1: {} } },
+    HM483: { ten: 'Thay thế driver led 100W', dvt: 'cái', goi: { G1: {} } },
+    HM506: { ten: 'Đào mương cáp đường nhựa', dvt: 'm3', goi: { G1: {} } },
+    HM515: { ten: 'Trồng cỏ mương cáp (không bao gồm cỏ)', dvt: '100m2', goi: { G1: {} } },
+    HM040_cg: { ten: 'Kiểm tra tủ điện', dvt: '1 lần', goi: {} },
+  };
+  const tat = (t) => N.nhomCua(t, CAT).flatMap((n) => n.ma);
+  // C1: Thay đèn ra nhóm đèn; không lẫn trụ/cần/chóa/đế; _cg bị ẩn
+  const td = tat('thay_den');
+  eq(['HM074', 'HM186', 'HM187', 'HM207', 'HM483'].every((m) => td.includes(m)), true, 'thay đèn: bộ đèn, lắp LED, tháo dỡ, bóng/chấn lưu, driver');
+  eq(['HM091', 'HM240', 'HM257', 'HM286', 'HM309', 'HM330', 'HM449', 'HM186_cg'].filter((m) => td.includes(m)), [], 'thay đèn: không lẫn chóa/đế/trụ/cần/dây/MCCB/_cg');
+  eq(N.nhomCua('thay_den', CAT).map((n) => n.nhom), ['Thay bộ đèn', 'Lắp đặt bộ đèn', 'Tháo dỡ · di dời đèn', 'Bóng · chấn lưu · kích', 'Linh kiện đèn LED'], 'thay đèn: 5 nhóm');
+  eq(tat('tc_noi'), ['HM347'], 'cáp nổi: không lẫn "nối ống" (nổi/nối cùng chữ khi bỏ dấu)');
+  eq(tat('choa_den'), ['HM091'], 'chóa: chỉ chóa');
+  ok(tat('tc_ngam').includes('HM506') && tat('tc_ngam').includes('HM346') && !tat('tc_ngam').includes('HM449'), 'cáp ngầm: cáp + đào mương, không lẫn MCCB "từ xa bằng"');
+  eq(tat('nang_mong').includes('HM257'), false, 'nâng móng: "không bao gồm móng trụ" không vào nhóm móng');
+  eq(N.LOAI_CO_NHOM.length, 17, 'đủ 17 loại khảo sát có nhóm');
+  eq(Object.keys(S.KS_MAP).every((t) => N.LOAI_CO_NHOM.includes(t)), true, 'mọi loại trong KS_MAP đều có nhóm');
+
+  // ĐVT 8 dạng
+  eq(['100m', '40m', '1m', '1 m', '100m2', '10m2', '100m3', '1m2', 'bộ', 'cái'].map(MA.heSoDVT), [0.01, 0.025, 1, 1, 0.01, 0.1, 0.01, 1, 1, 1], 'quy đổi ĐVT đủ dạng');
+  // Mã đúng gói: cáp ngầm G1 → HM346 (100m), G4 → HM346m (m)
+  eq(MA.goiYMa('tc_ngam', {}, 250, CAT, 'G1').chiTiet, [{ ma: 'HM346', kl: 2.5 }], 'cáp ngầm gói 1 → HM346');
+  eq(MA.goiYMa('tc_ngam', {}, 30, CAT, 'G4').chiTiet, [{ ma: 'HM346m', kl: 30 }], 'cáp ngầm gói 4 → HM346m');
+  eq(MA.goiYMa('tc_noi', {}, 80, CAT, 'G2'), null, 'mã không có trong gói → không gán');
+
+  // anhXa đọc lựa chọn của người khảo sát (_hd); hash chỉ đổi khi có
+  const rowTD = (hd) => ({ _type: 'thay_den', STT: 'TD-1', 'Tuyến đường': 'Châu Văn Liêm', Phường: 'Chợ Lớn', 'Tủ điều khiển': 'CVL-3', 'Số đèn hiện hữu': 4, 'Công suất đèn hiện hữu': '150W', ...(hd ? { _hd: hd } : {}) });
+  const a0 = S.anhXa(rowTD());
+  const a1 = S.anhXa(rowTD({ nam: 2026, goi: 'G1', goiTay: true, ds: [{ ma: 'HM207', heSo: 1 }, { ma: 'HM187', heSo: 1 }] }));
+  eq(a1.vt.ksChon, { nam: 2026, goi: 'G1', goiTay: true, ds: [{ ma: 'HM207', heSo: 1 }, { ma: 'HM187', heSo: 1 }] }, 'đọc lựa chọn KS');
+  eq(a0.vt.ksChon, undefined, 'không chọn → không có ksChon');
+  const hashCu = S.bam(JSON.stringify([a0.vt.tram, a0.vt.phuong, a0.vt.tuyen, a0.vt.kl, a0.vt.hienHuu, a0.vt.lyTrinhDau, a0.vt.lyTrinhCuoi, a0.vt.namLD, a0.vt.ghiChu, undefined]));
+  eq(a0.vt.nguon.hash, hashCu, 'bản không chọn: hash giữ như cũ');
+  ok(a1.vt.nguon.hash !== a0.vt.nguon.hash, 'có chọn mã → hash khác (app HĐ thấy thay đổi)');
+  eq(S.anhXa(rowTD({ goi: 'G1', ds: [{ ma: 'HM1', heSo: 1 }, { ma: 'HM2', heSo: 2 }, { ma: 'HM3', heSo: 1 }, { ma: 'HM4', heSo: 1 }, { ma: 5 }] })).vt.ksChon.ds.length, 3, 'tối đa 3 mã');
+
+  // Ưu tiên: mã KS chọn > mẫu > ksma; gói chọn tay khi phường chưa có
+  const st = kho(); Object.assign(st.catalog, CAT); st.catalog.HM187.goi.G1 = { kl: { 2026: 50 } }; st.catalog.HM207.goi.G1 = { kl: { 2026: 50 } };
+  st.mau.PLII = [{ ma: 'HM101', heSo: 1 }];
+  const row = { ...rowTD({ nam: 2026, goi: 'G1', goiTay: true, ds: [{ ma: 'HM207', heSo: 1 }, { ma: 'HM187', heSo: 1 }] }), 'Số đèn hiện hữu': 4 };
+  const xt = S.xemTruoc(st, [row], { namKH: 2026 });
+  const it = xt.items[0];
+  eq([it.goi, it.goiKS], ['G1', true], 'phường chưa có trong HĐ → dùng gói người KS chọn, có cờ');
+  eq(it.goiY, { ma: 'HM207', chac: true, ly: 'người khảo sát chọn (+1 mã)' }, 'gợi ý hiện mã KS chọn');
+  it.vt.kl = 4;
+  S.apDung(st, xt.items, { namKH: 2026 });
+  const v = st.viTri.find((x) => x.nguon?.ks === 'thay_den#TD-1');
+  eq(v.chiTiet, [{ ma: 'HM207', kl: 4 }, { ma: 'HM187', kl: 4 }], 'chi tiết = mã KS chọn (thắng mẫu PL II)');
+  eq(v.goiKS, true, 'vị trí ghi cờ gói do KS chọn');
+  // Lệch gói: phường đã có gói thật khác gói KS chọn
+  const row2 = { ...rowTD({ nam: 2026, goi: 'G2', goiTay: true, ds: [{ ma: 'HM186', heSo: 1 }] }), STT: 'TD-2', Phường: 'Bàn Cờ' };
+  const it2 = S.xemTruoc(st, [row2], { namKH: 2026 }).items[0];
+  eq([it2.goi, it2.lechGoi], ['G1', true], 'phường có gói thật G1 ≠ KS chọn G2 → giữ G1, nhãn lệch gói');
+  const st5 = kho(); Object.assign(st5.catalog, CAT);
+  S.apDung(st5, S.xemTruoc(st5, [row2], { namKH: 2026 }).items.map((x) => ({ ...x, vt: { ...x.vt, kl: 1 } })), { namKH: 2026 });
+  const v5 = st5.viTri.find((x) => x.nguon?.ks === 'thay_den#TD-2');
+  eq(S.lyDoChan(st5, v5), 'Lệch gói (KS chọn khác phụ lục) — gán lại gói', 'lệch gói → chặn chuyển đợt');
+  S.ganGoi(st5, [v5.id], 'G1');
+  eq([v5.lechGoi, S.lyDoChan(st5, v5) === 'Lệch gói (KS chọn khác phụ lục) — gán lại gói'], [undefined, false], 'gán lại gói → hết chặn');
+  const dongBo5 = (r) => S.apDung(st5, S.xemTruoc(st5, [r], { namKH: 2026 }).items.map((x) => ({ ...x, vt: { ...x.vt, kl: 2 } })), { namKH: 2026 });
+  dongBo5({ ...row2, 'Số đèn hiện hữu': 7 });
+  eq(st5.viTri.find((x) => x.id === v5.id).lechGoi, undefined, 'đã gán gói, KS sửa số khác nhưng giữ gói → không chặn lại');
+  dongBo5({ ...rowTD({ nam: 2026, goi: 'G3', goiTay: true, ds: [{ ma: 'HM186', heSo: 1 }] }), STT: 'TD-2', Phường: 'Bàn Cờ', 'Số đèn hiện hữu': 7 });
+  eq(st5.viTri.find((x) => x.id === v5.id).lechGoi, true, 'KS đổi sang gói khác → lệch gói lại');
+  // Sửa tay thắng; KS đổi mã sau sửa tay → nhãn, không ghi đè
+  v.chiTiet = [{ ma: 'HM186', kl: 4 }]; v.chiTietSua = true;
+  const row3 = { ...rowTD({ nam: 2026, goi: 'G1', goiTay: true, ds: [{ ma: 'HM186', heSo: 1 }, { ma: 'HM207', heSo: 1 }] }), 'Số đèn hiện hữu': 4 };
+  const xt3 = S.xemTruoc(st, [row3], { namKH: 2026 });
+  eq(xt3.items[0].trangThai, 'thayDoi', 'KS đổi mã → thay đổi');
+  S.apDung(st, xt3.items, { namKH: 2026 });
+  eq([v.chiTiet, v.nguon.doiMa], [[{ ma: 'HM186', kl: 4 }], true], 'chi tiết sửa tay giữ nguyên, nhãn "KS đổi mã"');
+  // Mã KS chọn không có trong gói / danh mục → bỏ qua, về mặc định
+  const st3 = kho(); Object.assign(st3.catalog, CAT); st3.mau.PLII = [];
+  const xt4 = S.xemTruoc(st3, [{ ...rowTD({ nam: 2026, goi: 'G1', ds: [{ ma: 'HM999', heSo: 1 }] }), STT: 'TD-9' }], { namKH: 2026 });
+  xt4.items[0].vt.kl = 2;
+  S.apDung(st3, xt4.items, { namKH: 2026 });
+  eq(st3.viTri.find((x) => x.nguon?.ks === 'thay_den#TD-9').chiTiet, [], 'mã KS chọn không có trong danh mục → không gán (thay đèn chưa có quy tắc mặc định)');
+
+  // Đẩy sang KS: loaiHM 3 cột, có nhóm, ẩn _cg, ≤ 5000 dòng
+  const st4 = kho(); Object.assign(st4.catalog, CAT);
+  const lh = S.tomTat(st4, 2026).loaiHM;
+  eq(lh.every((r) => r.length === 3), true, 'loaiHM đủ 3 cột');
+  ok(lh.some((r) => r[0] === 'thay_den' && r[1] === 'HM186' && r[2] === 'Thay bộ đèn'), 'loaiHM có nhóm');
+  eq(lh.filter((r) => /_cg$/.test(r[1])).length, 0, 'không đẩy mã _cg');
+  eq(lh.filter((r) => r[0] === 'thay_tru' && r[2] === 'Theo mẫu đã khai').map((r) => r[1]), ['HM210', 'HM214'], 'mã theo mẫu vẫn có, nhóm riêng');
 }
 
 console.log(`\nks.test: ${pass} đạt, ${fail} lỗi`);

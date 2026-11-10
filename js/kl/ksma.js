@@ -9,10 +9,16 @@ const met = (s) => { const m = fold(s).match(/(\d+(?:[.,]\d+)?)\s*m\b/); return 
 /** Công suất W đầu tiên ("LED 120W"). */
 const watt = (s) => { const m = fold(s).match(/(\d+(?:[.,]\d+)?)\s*w\b/); return m ? +m[1].replace(',', '.') : null; };
 
-/** Hệ số quy đổi theo ĐVT danh mục: "100m" → 1/100, "40m" → 1/40, còn lại 1. */
+/** Hệ số quy đổi theo ĐVT danh mục: "100m" → 1/100, "40m" → 1/40, "100m2"/"10m2"/"100m3" → 1/100, 1/10, 1/100; còn lại 1. */
 export function heSoDVT(dvt) {
-  const m = fold(dvt).trim().match(/^(\d+)\s*m$/);
+  const m = fold(dvt).trim().match(/^(\d+)\s*m[23]?$/);
   return m && +m[1] > 1 ? 1 / +m[1] : 1;
+}
+/** Mã có trong gói không. Danh mục không ghi gói (dữ liệu cũ / test) → coi như có. */
+export function coTrongGoi(it, goi) {
+  if (!it) return false;
+  if (!goi || !it.goi) return true;
+  return Object.prototype.hasOwnProperty.call(it.goi, goi);
 }
 
 // Trụ thép nhúng kẽm (dày 4mm) theo chiều cao
@@ -36,7 +42,9 @@ const RULE = {
   },
   vo_tu: () => ({ ma: 'HM131', chac: true, ly: 'thay thế vỏ tủ' }),
   tc_noi: () => ({ ma: 'HM347', chac: true, ly: 'thay thế cáp nguồn nổi' }),
-  tc_ngam: (a, cat) => (cat.HM346m ? { ma: 'HM346m', chac: true, ly: 'thay thế cáp ngầm (m)' } : { ma: 'HM346', chac: true, ly: 'thay thế cáp ngầm (100m)' }),
+  // HM346 (100m) ở G1–G3, HM346m (m) ở G4 → chọn mã có trong gói của vị trí
+  tc_ngam: (a, cat, goi) => (cat.HM346m && coTrongGoi(cat.HM346m, goi) && (!goi || !coTrongGoi(cat.HM346, goi) || !cat.HM346)
+    ? { ma: 'HM346m', chac: true, ly: 'thay thế cáp ngầm (m)' } : { ma: 'HM346', chac: true, ly: 'thay thế cáp ngầm (100m)' }),
   cap_luon_can: (a) => (/5\s*x/.test(fold(a.qc)) ? { ma: 'HM331', chac: true, ly: 'dây lên đèn cáp 5x2,5' }
     : { ma: 'HM330', chac: /3\s*x/.test(fold(a.qc)), ly: 'dây lên đèn cáp 3x2,5' }),
   hkn: () => ({ ma: 'HM099', chac: false, ly: 'hộp nối kín nước — mặc định rẽ nhánh (liên thông: HM100)' }),
@@ -77,11 +85,11 @@ const RULE = {
  * Gợi ý chi tiết HM cho 1 vị trí lấy từ khảo sát.
  * @returns {{chiTiet:[{ma,kl}], ma, chac, ly} | null} null = không có quy tắc / mã không có trong danh mục HĐ.
  */
-export function goiYMa(type, thuoc, kl, catalog = {}) {
+export function goiYMa(type, thuoc, kl, catalog = {}, goi = null) {
   const f = RULE[type];
   if (!f) return null;
-  const r = f(thuoc || {}, catalog);
-  if (!r || !catalog[r.ma]) return null;
+  const r = f(thuoc || {}, catalog, goi);
+  if (!r || !catalog[r.ma] || !coTrongGoi(catalog[r.ma], goi)) return null;   // mã phải đúng gói của vị trí
   const chiTiet = kl === null || kl === undefined ? [] : [{ ma: r.ma, kl: Math.round(kl * heSoDVT(catalog[r.ma].dvt) * 1e6) / 1e6 }];
   return { ...r, chiTiet };
 }

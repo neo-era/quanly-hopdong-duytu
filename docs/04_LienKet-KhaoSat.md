@@ -100,6 +100,55 @@ Hai app cùng origin `neo-era.github.io`. Dữ liệu HĐ ở Drive riêng → c
 - ~~`tang_cuong_den`, `ngam_hoa` có thuộc HĐ duy tu không~~ → anh chốt 09/11: mọi loại khảo sát đều có hạng mục HĐ.
 - Tài khoản Google chủ Apps Script để triển khai bản mới.
 
+## 6. Giai đoạn 2 — Chọn hạng mục HĐ ngay trong form khảo sát (anh yêu cầu 10/11/2026)
+
+**Yêu cầu anh:** "cho phép chọn hạng mục hợp đồng, phân loại cập nhật dữ liệu tương ứng" · "phân loại nhóm hạng mục theo từng loại khảo sát". Anh chốt: lựa chọn **lưu vào bản ghi**; app HĐ dùng đúng mã đó thay cho mã tự đoán.
+
+**Hiện trạng gây vướng:** phường chưa có trong phụ lục thật (vd Chợ Lớn) → bảng HĐ chỉ báo "chưa có"; loại Thay đèn chưa có mã HM nào gán sẵn → "chưa gán mã".
+
+### 6.1 Thiết kế
+- **Nhóm hạng mục theo loại khảo sát** (`js/kl/ksnhom.js` bên app HĐ): mỗi loại trong 17 loại có 1–4 nhóm con, mỗi nhóm là quy tắc theo **tên hạng mục** (bỏ dấu) trên danh mục HĐ đang nhập, không cứng mã. Vd Thay đèn: Thay bộ đèn · Lắp đèn LED theo công suất · Bóng/chấn lưu/kích · Linh kiện LED (driver, module, nguồn). Mã nằm trong nhóm theo tên thật của bảng giá ký 2026–2029 (đối chiếu danh mục 1.102 mã, không đưa danh mục lên repo).
+- **Đẩy sang KS:** bảng `loaiHM` thêm cột 3 "Nhóm" (máy chủ nhận cả bản 2 cột của app HĐ cũ). Mỗi loại kèm đủ mã của các nhóm có trong danh mục.
+- **Form KS — bảng "Thông tin hợp đồng":**
+  - Phường chưa có trong HĐ hoặc thuộc nhiều gói → **chọn gói** (danh sách gói có trong dữ liệu HĐ, kèm mã gói thầu).
+  - **Chọn hạng mục**: danh sách theo nhóm của loại đang nhập, mỗi dòng mã · tên · ĐVT · KL HĐ · còn lại; ô tìm (bỏ dấu, theo mã/tên); "Xem nhóm của loại khác" khi cần. Mặc định "Để app HĐ tự chọn".
+  - Đã chọn → thanh HĐ hiện mã đã chọn + KL còn lại của mã đó.
+  - **Nhớ lựa chọn**: gợi ý theo lần chọn trước (gói theo phường; mã theo loại + gói) có nhãn "📚 theo lần trước" — chỉ là gợi ý mặc định, không tự lưu; có nút "Quên các lựa chọn đã nhớ".
+- **Lưu:** sheet mới `HD_ChonHM` (Loại · STT · Gói · Mã HM · Tên HM · Người chọn · Lúc) — **không thêm cột vào 17 sheet khảo sát**. Ghi kèm lúc lưu bản mới (`submit` nhận `hd:{goi,ma}`), lúc sửa bản (`update`), và qua action `hd_chon` (chủ bản ghi hoặc quyền edit). Bỏ chọn = xoá dòng. Ghi Audit.
+- **App HĐ đọc:** `list` trả thêm 2 trường ảo `HĐ – Gói`, `HĐ – Mã HM` cho bản có lựa chọn. Ánh xạ: mã chọn có trong danh mục → chi tiết HM = mã đó × KL (quy đổi ĐVT 100m/40m), nhãn "người khảo sát chọn"; phường không có gói → dùng gói đã chọn. Mẫu người dùng khai / chi tiết đã sửa tay trong app HĐ **vẫn ưu tiên** (không ghi đè chỉnh tay).
+
+### 6.2 Tiêu chí "chạy đúng"
+- C1. Mọi 17 loại có ≥ 1 nhóm; Thay đèn ra nhóm đèn (vd HM186, HM187–HM205, HM208–HM209, HM074–HM090); không lẫn mã trụ/cần/chóa vào nhóm đèn và ngược lại (test bằng tên mẫu, không dùng dữ liệu thật).
+- C2. Phường không có trong HĐ vẫn chọn được gói rồi chọn mã; số KL HĐ/còn lại đúng theo gói đã chọn và năm.
+- C3. Chọn mã → lưu cùng bản ghi (online, offline hàng chờ, sửa bản); bỏ chọn → xoá; không chọn → không ghi gì (giữ hành vi cũ).
+- C4. Máy chủ chỉ nhận mã đúng mẫu `HM` + số (+ hậu tố) và gói `G` + số; mã không có trong dữ liệu HĐ đang lưu → từ chối kèm lý do; người không phải chủ bản & không có quyền edit → từ chối.
+- C5. App HĐ lấy bản KS có mã chọn → chi tiết đúng mã chọn, KL quy đổi đúng ĐVT; bản không chọn → như cũ (ksma.js); chi tiết đã sửa tay không bị ghi đè.
+- C6. Tương thích: máy chủ cũ (chưa có `hd_chon`) → phần chọn ẩn, form vẫn lưu được; app HĐ cũ đẩy `loaiHM` 2 cột vẫn nhận.
+- C7. Nhớ lựa chọn: lần sau cùng loại + gói gợi ý mã cũ kèm nhãn; người dùng đổi → nhớ theo lựa chọn mới; xoá được bộ nhớ; dữ liệu hỏng không làm sập form.
+- C8. Giao diện: chọn được bằng một tay trên 360×640 và màn ngang; vùng chạm ≥ 48px; danh sách dài cuộn trong bảng, ô tìm không bị bàn phím che; sáng + tối; không che nút Lưu.
+- C9. Bảo mật: mọi chuỗi hiển thị được escape; chuỗi ghi sheet qua `sanitizeCell`; không trả tiền/đơn giá.
+- C10. Test: lõi nhóm (Node), máy chủ (harness), client (jsdom/Playwright chặn mạng); toàn bộ test cũ vẫn xanh.
+
+### 6.3 Thay đổi bắt buộc sau duyệt Bước 0 (đã áp vào thiết kế)
+- **Mã đúng gói:** danh sách, gợi ý `ksma.js` và máy chủ chỉ nhận mã có trong gói đã chọn (vd HM346 ở G1–G3 ĐVT 100m, HM346m ở G4 ĐVT m).
+- **Nhiều mã / bản ghi:** tối đa 3 mã, mỗi mã có hệ số KL (mặc định 1) — vd Thay đèn = Tháo dỡ bộ đèn + Lắp đặt LED theo công suất. `HD_ChonHM` 1 dòng/mã, khoá (Loại, STT, Mã).
+- **Mã `_cg`:** anh chốt 10/11 — **ẩn khỏi danh sách** của người khảo sát (văn phòng xử lý trong app HĐ). Bỏ dòng không có gói.
+- **ĐVT:** quy đổi đủ dạng `100m`, `40m`, `1m`, `1 m`, `100m2`, `10m2`, `100m3`, `1m2`.
+- **Gói chọn tay:** chỉ mở khi phường chưa có / nhiều gói; gói có phường cùng quận cũ đứng trước, gói khác quận hỏi xác nhận; lưu cờ "gói do KS chọn", không đưa vào `HD_PhuongGoi`; app HĐ hiện nhãn "gói KS chọn" / "lệch gói" khi phụ lục thật ra gói khác.
+- **Năm:** chọn năm trong các năm có dữ liệu HĐ; lưu năm cùng lựa chọn; KL còn lại theo năm đã chọn.
+- **Thứ tự ưu tiên ở app HĐ** (theo chốt của anh "app HĐ dùng đúng mã đó"; chuyên gia kỹ thuật đề xuất mẫu đứng trước — không nhận vì trái chốt): chi tiết sửa tay > mã KS chọn > mẫu > `ksma.js`. KS đổi mã sau khi vị trí đã sửa tay → nhãn "KS đổi mã", không ghi đè.
+- **Không làm kẹt bản khảo sát:** mã/gói sai → bản khảo sát vẫn lưu, bỏ phần mã, trả `hd_warning`; không gộp vào `validateRecord_`.
+- **Thứ tự ghi trong khoá `submit`:** dòng khảo sát → `client_ids` → `HD_ChonHM` (try/catch, lỗi = cảnh báo). Gửi lại trùng: chỉ ghi lựa chọn nếu chưa có.
+- **`update`:** không có `hd` = giữ; `hd:null` = bỏ chọn; có `hd` = ghi; tự `tryLock`.
+- **Kiểm ở máy chủ:** mã `^HM\d{1,4}[A-Za-z0-9]{0,4}$` (không nhận `_cg`), gói `^G\d{1,2}$`, cặp (gói, năm, mã) có trong `tomTat`; phường thuộc đúng 1 gói thì gói phải trùng; tên HM lấy từ máy chủ; từ chối bản đã xoá; chủ bản (không có quyền edit) bị từ chối khi bản đã vào PL / đã thực hiện / Nghiệm thu, người có quyền edit phải gửi xác nhận. `hd_chon` **không** vào `HD_SCOPE_ACTIONS`.
+- **Máy chủ cũ:** máy chủ mới trả `hd_saved:true`; `hd_info` trả `chon:true` → client chỉ hiện phần chọn khi có cờ; đã gửi mã mà không có `hd_saved` → báo người dùng.
+- **`loaiHM` 2/3 cột:** nhận cả hai, bù ô thiếu; giới hạn nhóm để tổng ≤ 5.000 dòng (test cỡ thật dựng giả).
+- **Cache:** bảng tra gọn "gói|năm|mã → tên, ĐVT" cache riêng có số phiên bản; kiểm mã trước khi lấy khoá.
+- **App HĐ:** hash thay đổi chỉ thêm gói/mã chọn khi có; `apDung` dùng gói chọn khi phường chưa có / nhiều gói.
+- **Bộ nhớ học:** gợi ý là chip, phải chạm mới thành lựa chọn; tách theo người dùng, ≤ 200 mục, xoá khi đăng xuất, đọc trong try/catch, kiểm lại với danh mục hiện tại.
+- **Nháp / hàng chờ / sửa bản:** nháp giữ `__hd`; hàng chờ để `hd` trong payload; mở lại từ hàng chờ và màn sửa khôi phục lựa chọn rồi kiểm lại với `hd_info`.
+- **Giao diện (chốt UI — chuyên gia UX chọn C + bảng chọn kiểu B + ô tìm toàn bộ của A):** ô "Hạng mục HĐ" trong form sau Phường/TĐK, chạm cả ô ≥ 56px; mặc định "Để app HĐ tự chọn"; gợi ý ghim đầu, không chọn sẵn; chip ≥ 48px, nút đáy ≥ 52px trong safe-area; viền ≥ 3:1; chữ ≥ 14px; ô tìm 16px, chạm vào thì bảng giãn toàn màn, ô tìm dính đỉnh; màn ngang 2 cột (trái gói/nhóm, phải danh sách); chọn xong đóng bảng, ô nháy viền, toast "Đã chọn … — sẽ lưu cùng bản ghi" + Hoàn tác, `aria-live`; trạng thái đang tải / lỗi + Thử lại / không khớp / máy chủ cũ; "Hết KL" bằng chữ; đổi gói xoá mã đã chọn; chip nhóm có mép mờ báo còn chip; đổi phường/loại → "Cần chọn lại"; Back đóng bảng.
+
 ## Nhật ký duyệt
 | Ngày | Chốt | Chuyên gia | Quyết định | Thay đổi đã áp |
 |---|---|---|---|---|
@@ -109,3 +158,9 @@ Hai app cùng origin `neo-era.github.io`. Dữ liệu HĐ ở Drive riêng → c
 | 09/11/2026 | Chốt UI | UX/UI mobile | Chọn **B** cho cả hai app (KS: thanh chip dính trên nút Lưu + bottom sheet; HĐ: thống kê + nhóm theo đích, ghép bộ lọc chip của A, thẻ chi tiết của C khi chạm dòng) | Bỏ so sánh "số đang nhập > còn lại", chip KL màu trung tính; thanh ≥48px, chữ ≥14px tương phản cao; cao cố định mọi trạng thái; ẩn khi bàn phím mở; pill ≥12px/24px; chạm cả dòng; checkbox nhóm 3 trạng thái; token màu sáng (#15803d/#a16207/#b91c1c); ô thống kê lọc được; phân trang >50 dòng/nhóm; giữ bộ lọc ở màn ngang; trạng thái tải/lỗi/rỗng theo từng loại; footer ghi "không cộng vào Đã đưa vào KH" |
 | 09/11/2026 | Phạm vi | Anh | Mọi hạng mục khảo sát đều có hạng mục HĐ duy tu | Lấy đủ 17 loại (thêm tăng cường đèn, ngầm hóa, băng rôn, sự cố vào nhóm Khác); thanh HĐ hiện ở mọi form |
 | 09/11/2026 | Mã HM | Anh | Mặc định hạng mục theo mã HM trong app HĐ | Thêm ksma.js: quy tắc chọn mã theo tên hạng mục bảng giá ký (đã đối chiếu 63 mã có trong Tong hop HM thật); mẫu người dùng khai vẫn ưu tiên |
+| 10/11/2026 | Bước 0 (GĐ2) | Nghiệp vụ duy tu CS | Duyệt có điều kiện | mã đúng gói; ≤ 3 mã + hệ số; ẩn `_cg` (anh chốt); ĐVT 8 dạng; gói chọn tay có cờ + nhãn lệch gói; chọn năm; thứ tự ưu tiên; nhóm theo đối tượng đầu tên |
+| 10/11/2026 | Bước 0 (GĐ2) | Apps Script/PWA bảo mật | Duyệt có điều kiện | không kẹt bản KS vì mã HĐ; thứ tự ghi; `update` 3 trạng thái; kiểm cặp gói–năm–mã ở máy chủ; `hd_saved` + `chon`; `loaiHM` 2/3 cột, trần 5.000; cache bảng tra gọn; hash; gợi ý phải chạm; nháp/hàng chờ/sửa. Không nhận "mẫu trước mã KS chọn" (trái chốt anh) |
+| 10/11/2026 | Chốt UI (GĐ2) | UX/UI mobile | Chọn C + bảng chọn B + tìm toàn bộ của A | 11 thay đổi bắt buộc (mục 6.3 Giao diện) |
+| 10/11/2026 | Mã `_cg` | Anh | Ẩn `_cg` khỏi danh sách người khảo sát | — |
+| 10/11/2026 | Chốt 2 (GĐ2) vòng 1 | Kỹ thuật + QA độc lập | Duyệt có điều kiện | 5 bắt buộc: đổi phường không làm mất/xoá lựa chọn (chỉ xoá khi bấm Bỏ chọn); `update` qua cùng chốt quyền `hdChonChot_` (đã xoá / vào PL / Nghiệm thu cần xác nhận); lỗi kiểm mã không làm hỏng lưu bản KS; hàng chờ báo `hd_warning`; đổi gói/năm xoá danh sách cũ + chặn chạm khi đang tải |
+| 10/11/2026 | Chốt 2 (GĐ2) vòng 2 | Kỹ thuật + QA độc lập | DUYỆT | Đã áp đủ 5 bắt buộc + Back = huỷ, nút Quên bộ nhớ, không gắn lại Lệch gói sau khi văn phòng gán gói, hỏi bỏ lựa chọn cũ khi sửa bản đổi phường. Test: ks2 159/159, q2 ks 150 đạt |

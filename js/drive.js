@@ -9,6 +9,29 @@ let accessToken = null;
 let tokenExpiry = 0;
 let fileId = null;
 
+// Giữ đăng nhập (anh yêu cầu 11/11/2026 "luôn đăng nhập"):
+// - Token Google (hạn ~1 giờ, quyền drive.file) lưu trên máy → mở lại app trong hạn là vào thẳng.
+// - Hết hạn: nhớ "đã từng đăng nhập" → lần chạm đầu tiên tự xin token mới không hỏi lại (prompt '').
+//   Trình duyệt chỉ cho mở cửa sổ Google khi người dùng chạm, nên không làm được lúc vừa mở app.
+// - Đăng xuất xoá hết.
+const K_TOK = 'hd_gauth_v1', K_NHO = 'hd_gauth_nho';
+const ls = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch { /* bỏ qua */ } },
+  del(k) { try { localStorage.removeItem(k); } catch { /* bỏ qua */ } },
+};
+function luuToken() { ls.set(K_TOK, JSON.stringify({ t: accessToken, exp: tokenExpiry })); ls.set(K_NHO, '1'); }
+(function napToken() {
+  try {
+    const o = JSON.parse(ls.get(K_TOK) || 'null');
+    if (o && typeof o.t === 'string' && Number(o.exp) > Date.now()) { accessToken = o.t; tokenExpiry = Number(o.exp); }
+  } catch { /* hỏng → coi như chưa có */ }
+})();
+/** Đã từng đăng nhập trên máy này (chưa bấm Đăng xuất). */
+export function wasSignedIn() { return ls.get(K_NHO) === '1'; }
+/** Còn bao nhiêu ms trước khi token hết hạn (0 nếu đã hết). */
+export function msConLai() { return accessToken ? Math.max(0, tokenExpiry - Date.now()) : 0; }
+
 const listeners = new Set();
 export function onAuthChange(fn) { listeners.add(fn); return () => listeners.delete(fn); }
 function emit() { listeners.forEach(fn => fn(isSignedIn())); }
@@ -47,22 +70,47 @@ export function signIn() {
       if (resp.error) return reject(new Error(resp.error));
       accessToken = resp.access_token;
       tokenExpiry = Date.now() + (resp.expires_in - 60) * 1000;
+      luuToken();
       emit();
       resolve(true);
     };
-    tokenClient.requestAccessToken({ prompt: accessToken ? '' : 'consent' });
+    tokenClient.requestAccessToken({ prompt: accessToken || wasSignedIn() ? '' : 'consent' });
   });
+}
+
+let dangXin = null;
+/** Xin token mới không hỏi (gọi trong thao tác chạm). Trả true/false, không ném lỗi. */
+export function signInSilent() {
+  if (!tokenClient) return Promise.resolve(false);
+  if (dangXin) return dangXin;
+  dangXin = new Promise((resolve) => {
+    const xong = (ok) => { clearTimeout(t); dangXin = null; resolve(ok); };
+    const t = setTimeout(() => xong(false), 20000);
+    tokenClient.callback = (resp) => {
+      if (resp.error || !resp.access_token) return xong(false);
+      accessToken = resp.access_token;
+      tokenExpiry = Date.now() + (resp.expires_in - 60) * 1000;
+      luuToken();
+      emit();
+      xong(true);
+    };
+    try { tokenClient.error_callback = () => xong(false); } catch { /* bản GIS cũ */ }
+    try { tokenClient.requestAccessToken({ prompt: '' }); } catch { xong(false); }
+  });
+  return dangXin;
 }
 
 export function signOut() {
   if (accessToken && window.google?.accounts?.oauth2)
     window.google.accounts.oauth2.revoke(accessToken, () => {});
-  accessToken = null; tokenExpiry = 0; fileId = null; emit();
+  accessToken = null; tokenExpiry = 0; fileId = null;
+  ls.del(K_TOK); ls.del(K_NHO);
+  emit();
 }
 
 async function api(url, opts = {}) {
   const r = await fetch(url, { ...opts, headers: { Authorization: 'Bearer ' + accessToken, ...(opts.headers || {}) } });
-  if (r.status === 401) { accessToken = null; tokenExpiry = 0; emit(); throw new Error('Phiên đăng nhập hết hạn, mời đăng nhập lại.'); }
+  if (r.status === 401) { accessToken = null; tokenExpiry = 0; ls.del(K_TOK); emit(); throw new Error('Phiên đăng nhập hết hạn — chạm bất kỳ chỗ nào để tiếp tục phiên.'); }
   if (!r.ok) throw new Error('Lỗi Drive ' + r.status + ': ' + (await r.text()).slice(0, 200));
   return r;
 }

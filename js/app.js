@@ -14,7 +14,20 @@ async function boot() {
   // 2) Nếu đã cấu hình Google thì chuẩn bị đăng nhập (không ép)
   if (D.hasConfig()) {
     try { await D.initAuth(); } catch (e) { /* im lặng, UI báo cần cấu hình */ }
-    D.onAuthChange((signed) => { if (signed) UI.render(); });
+    D.onAuthChange((signed) => { UI.render(); });
+    // Luôn đăng nhập: còn token → tải bản mới nhất từ Drive ngay; hết hạn → chạm đầu tiên tự nối lại phiên.
+    if (D.isSignedIn()) { UI.render(); UI.reloadFromDrive({ quiet: true }); }
+    let dangNoi = false;
+    const noiLai = async () => {
+      if (dangNoi || !D.wasSignedIn() || D.msConLai() > 10 * 60 * 1000) return;   // còn > 10 phút thì thôi
+      dangNoi = true;
+      const mat = !D.isSignedIn();
+      const ok = await D.signInSilent();
+      dangNoi = false;
+      if (ok && mat) UI.reloadFromDrive({ quiet: true });
+    };
+    document.addEventListener('pointerdown', noiLai, true);
+    document.addEventListener('keydown', noiLai, true);
   }
 
   // 3) Service worker (PWA)

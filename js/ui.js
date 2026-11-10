@@ -41,7 +41,9 @@ function renderHeader() {
     ? `<span class="hint">Chưa cấu hình Google — xem README</span>`
     : signed
       ? `<button class="btn ghost" id="btnSignout">Đăng xuất</button>`
-      : `<button class="btn amber" id="btnSignin">Đăng nhập Google</button>`;
+      : D.wasSignedIn()
+        ? `<button class="btn amber" id="btnSignin" title="Phiên Google hết hạn — chạm để nối lại, không cần chọn lại tài khoản">↻ Tiếp tục phiên</button>`
+        : `<button class="btn amber" id="btnSignin">Đăng nhập Google</button>`;
   const saveBtn = signed
     ? `<button class="btn ${st.dirty ? 'amber' : 'ghost'}" id="btnSave" ${st.dirty ? '' : 'disabled'}>
          ${st.dirty ? '● Lưu lên Drive' : 'Đã lưu'}</button>`
@@ -436,11 +438,17 @@ async function doSave() {
   } catch (err) { toast('Lưu thất bại: ' + err.message, 'err'); }
 }
 
-export async function reloadFromDrive() {
+export async function reloadFromDrive({ quiet = false } = {}) {
   try {
+    if (quiet) {
+      // Tự tải khi mở app / nối lại phiên: không đè bản đang sửa dở chưa lưu, không chuyển màn hình
+      const st = S.getState();
+      if (st.dirty) { toast('Đang có thay đổi chưa lưu — chưa tải bản trên Drive.'); return; }
+      if (st.baseModifiedTime && !(await D.remoteNewerThan(st.baseModifiedTime))) { render(); return; }   // bản trên máy đã là bản mới nhất
+    }
     const res = await D.loadData();
     if (res) { await S.setFromDrive(res.data, res.modifiedTime); toast('Đã tải dữ liệu từ Drive.', 'ok'); }
     else toast('Drive chưa có dữ liệu — bạn có thể nhập mới rồi “Lưu lên Drive”.');
-    go('dashboard');
+    if (quiet) render(); else go('dashboard');
   } catch (err) { toast('Không tải được từ Drive: ' + err.message, 'err'); }
 }

@@ -8,10 +8,18 @@
 //              chiTiet:[{ma, kl}], trangThai:'chua'|'dang'|'da', thangNT, thucHien: {ma: kl} | null }]
 import { MA_GOI_THAU } from './parse.js';
 
-export const LOAI_TEN = { PLI: 'PL I · Thay/sửa tủ', PLII: 'PL II · HPS→LED', PLIII: 'PL III · Sửa/thay trụ', PLIV: 'PL IV · Trụ trang trí', KHAC: 'Khác · ngoài phụ lục' };
+// Mã nội bộ giữ nguyên (PLI = tủ, PLII = LED, PLIII = trụ, PLIV = trụ trang trí); số La Mã đổi theo đợt → chỉ sinh khi xuất (doc 05 mục 1).
+// Tên hiển thị giữ chữ "PL I…" cho 4 mã cũ (người dùng đã quen), mã mới không có số.
+export const LOAI_TEN = { PLI: 'PL I · Thay/sửa tủ', PLII: 'PL II · HPS→LED', PLIII: 'PL III · Sửa/thay trụ', PLIV: 'PL IV · Trụ trang trí',
+  HANGAM: 'Hạ ngầm cáp', HPS_AN: 'HPS đảm bảo an ninh', MYTHUAT: 'Đèn mỹ thuật', CAPNGAM: 'Thay cáp nguồn ngầm', TANGCUONG: 'Tăng cường LED',
+  KHAC: 'Khác · ngoài phụ lục' };
+/** Thứ tự phụ lục trình Sở khi đánh số La Mã (theo mẫu 21-09); mã không có trong danh sách xếp sau. */
+export const THU_TU_PL = ['HANGAM', 'PLI', 'PLII', 'PLIII', 'HPS_AN', 'MYTHUAT', 'PLIV', 'TANGCUONG', 'CAPNGAM'];
+/** Kênh của phụ lục: 'TS' trình Sở (mặc định — dữ liệu cũ) | 'TT' khối lượng thẩm quyền Trung tâm. */
+export const kenhPL = (p) => (p?.kenh === 'TT' ? 'TT' : 'TS');
 
 export function emptyState() {
-  return { catalog: {}, catalogNam: [], catalogNguon: null, bangGia: {}, mau: { PLI: [], PLII: [], PLIII: [], PLIV: [] }, phuLuc: [], viTri: [] };
+  return { catalog: {}, catalogNam: [], catalogNguon: null, bangGia: {}, mau: { PLI: [], PLII: [], PLIII: [], PLIV: [], HANGAM: [], HPS_AN: [], MYTHUAT: [], CAPNGAM: [], TANGCUONG: [] }, phuLuc: [], viTri: [] };
 }
 
 /** Chuẩn hoá chữ để so khớp: bỏ dấu, đ→d, thường, gộp khoảng trắng. */
@@ -43,7 +51,8 @@ const round = (x) => Math.round(x * 1e6) / 1e6;
  * (giữ lại trạng thái thực hiện / chi tiết HM đã sửa của các vị trí trùng khoá).
  */
 export function importPL(st, r, opts = {}) {
-  const old = st.phuLuc.find((p) => p.file === (opts.file || '') && p.sheet === r.sheet && p.loai === r.loai);
+  const kenh = opts.kenh === 'TT' ? 'TT' : 'TS';
+  const old = st.phuLuc.find((p) => p.file === (opts.file || '') && p.sheet === r.sheet && p.loai === r.loai && kenhPL(p) === kenh);
   if (old && !opts.mode) return { them: 0, trung: true, plId: old.id };
   if (old && opts.mode === 'skip') return { them: 0, boQua: true, plId: old.id };
   const giuLai = new Map();
@@ -58,12 +67,15 @@ export function importPL(st, r, opts = {}) {
     donGia: r.viTri.find((v) => v.donGia)?.donGia ?? null, header: r.header || null,
     nhom: r.groups.map((g) => g.ten), ngayNhap: new Date().toISOString(),
   };
+  if (kenh === 'TT') pl.kenh = 'TT';
   st.phuLuc.push(pl);
   const mau = st.mau[r.loai] || [];
   for (const v of r.viTri) {
     const prev = giuLai.get(keyVT(v) + '#' + v.stt);
     const n = { ...v, id: prev?.id || uid('vt'), plId: pl.id, goi: v.goi || opts.goiMacDinh || null };
     delete n.row; delete n.hidden;
+    // Cột "không có trong KH" nhập từ file: giữ đúng X của file, app không tính lại (doc 05 H6)
+    n.ngoaiKH = 'file';
     n.chiTiet = prev?.chiTietSua ? prev.chiTiet : apMau(mau, v.kl);
     n.chiTietSua = !!prev?.chiTietSua;
     n.trangThai = prev?.trangThai || 'chua';
@@ -127,11 +139,13 @@ export function doiChieu(st, goi, nam, { phan = 'ld' } = {}) {
   const all = vtTheo(st, goi, nam).filter((v) => phan !== 'sap' || !laDoiTac(v));
   const vts = all.filter((v) => !nhapIds.has(v.plId));
   const acc = new Map();
-  const get = (ma) => { if (!acc.has(ma)) acc.set(ma, { ma, kh: 0, th: 0, nVT: 0, khKS: 0 }); return acc.get(ma); };
+  const ttIds = new Set(st.phuLuc.filter((p) => kenhPL(p) === 'TT').map((p) => p.id));
+  const get = (ma) => { if (!acc.has(ma)) acc.set(ma, { ma, kh: 0, khTT: 0, th: 0, nVT: 0, khKS: 0 }); return acc.get(ma); };
   for (const v of all) if (nhapIds.has(v.plId)) for (const c of v.chiTiet || []) get(c.ma).khKS += +c.kl || 0;
   for (const v of vts) {
     const seen = new Set();
-    for (const c of v.chiTiet || []) { const a = get(c.ma); a.kh += +c.kl || 0; if (!seen.has(c.ma)) { a.nVT++; seen.add(c.ma); } }
+    const tt = ttIds.has(v.plId);
+    for (const c of v.chiTiet || []) { const a = get(c.ma); a.kh += +c.kl || 0; if (tt) a.khTT += +c.kl || 0; if (!seen.has(c.ma)) { a.nVT++; seen.add(c.ma); } }
     for (const [ma, kl] of Object.entries(klTH(v))) get(ma).th += +kl || 0;
   }
   // KL kế hoạch theo biểu mã gói thầu của các đơn vị (cột chính của từng biểu)
@@ -153,7 +167,7 @@ export function doiChieu(st, goi, nam, { phan = 'ld' } = {}) {
     const dg = g?.dgNam?.[nam] ?? g?.dg ?? it?.dgChuaVat ?? 0;
     const kh = round(a.kh), th = round(a.th);
     return {
-      ma: a.ma, ten: it?.ten || '', dvt: it?.dvt || '', hd, kh, th, nVT: a.nVT,
+      ma: a.ma, ten: it?.ten || '', dvt: it?.dvt || '', hd, kh, khTS: round(a.kh - a.khTT), khTT: round(a.khTT), th, nVT: a.nVT,
       khConLai: round(kh - th), hdConLai: round(hd - kh), vuot: kh - hd > 1e-9,
       khongCoTrongHD: !it, dg, tienKH: kh * dg, tienTH: th * dg, nhom: it?.nhom || '',
       khDV: dvMap.has(a.ma) ? round(dvMap.get(a.ma).tong) : null, khDVTheo: dvMap.get(a.ma)?.theo || [],
@@ -186,7 +200,9 @@ export function viTriCuaHM(st, ma, goi, nam, { phan = 'ld' } = {}) {
  */
 export function khopThucHien(st, r, thang, { apply = true } = {}) {
   // Không khớp vào phụ lục nháp (đề xuất từ app Khảo sát) — chỉ phụ lục thật
-  const ids = new Set(st.phuLuc.filter((p) => p.loai === r.loai && !p.nhap).map((p) => p.id));
+  // Chỉ khớp trong cùng kênh (TS ↔ TS, TT ↔ TT) — trùng vị trí giữa 2 kênh không khớp chéo (doc 05 H2)
+  const kenh = r.kenh === 'TT' ? 'TT' : 'TS';
+  const ids = new Set(st.phuLuc.filter((p) => p.loai === r.loai && !p.nhap && kenhPL(p) === kenh).map((p) => p.id));
   const pool = new Map();
   for (const v of st.viTri) if (ids.has(v.plId)) { const k = keyVT(v); if (!pool.has(k)) pool.set(k, []); pool.get(k).push(v); }
   const used = new Set();
@@ -443,4 +459,48 @@ export function bbntMoiNhat(st, goi, nam) {
   if (!L.length) return null;
   const t = Math.max(...L.map((n) => n.thang));
   return gopThang(L.filter((n) => n.thang === t));
+}
+
+/**
+ * Cột "KL đề xuất không có trong kế hoạch bảo trì" (đánh X) cho 1 phụ lục (doc 05 H6):
+ * - vị trí nhập từ file (`ngoaiKH === 'file'` hoặc không lấy từ KS) → giữ đúng X của file;
+ * - vị trí lấy từ KS → X khi KL các mã HM, cộng dồn theo thứ tự trong phụ lục, vượt "HĐ còn lại chưa vào KH" của gói/năm;
+ * - văn phòng bật/tắt tay (`ngoaiKHTay` true/false) thắng giá trị tự tính.
+ * Trả Map(id → 'X' | '').
+ */
+export function ngoaiKHCua(st, pl) {
+  const out = new Map();
+  const vts = st.viTri.filter((v) => v.plId === pl.id);
+  const conLai = new Map();   // goi → Map(ma → còn lại)
+  const cong = new Map();
+  for (const v of vts) {
+    if (v.ngoaiKH === 'file' || !v.nguon?.ks) { out.set(v.id, v.klNgoaiKH ? String(v.klNgoaiKH) : ''); continue; }
+    if (v.ngoaiKHTay !== undefined) { out.set(v.id, v.ngoaiKHTay ? 'X' : ''); continue; }
+    if (!v.goi || v.goi === 'nhieu') { out.set(v.id, ''); continue; }
+    if (!conLai.has(v.goi)) {
+      const m = new Map();
+      for (const r of doiChieu(st, v.goi, pl.namKH).rows) {
+        // KH của chính phụ lục này (nếu là phụ lục thật) không trừ 2 lần
+        const cuaPL = pl.nhap ? 0 : vts.filter((x) => x.goi === v.goi).reduce((a, x) => a + (x.chiTiet || []).filter((c) => c.ma === r.ma).reduce((b, c) => b + (+c.kl || 0), 0), 0);
+        m.set(r.ma, r.hd - (r.kh - cuaPL));
+      }
+      conLai.set(v.goi, m); cong.set(v.goi, new Map());
+    }
+    const m = conLai.get(v.goi), c = cong.get(v.goi);
+    let vuot = false;
+    for (const x of v.chiTiet || []) {
+      const t = round((c.get(x.ma) || 0) + (+x.kl || 0));
+      c.set(x.ma, t);
+      if (t - (m.get(x.ma) ?? 0) > 1e-9) vuot = true;
+    }
+    out.set(v.id, vuot ? 'X' : '');
+  }
+  return out;
+}
+/** Văn phòng bật/tắt X cho 1 vị trí (null = về tự động). */
+export function datNgoaiKH(st, id, val) {
+  const v = st.viTri.find((x) => x.id === id);
+  if (!v) return false;
+  if (val === null || val === undefined) delete v.ngoaiKHTay; else v.ngoaiKHTay = !!val;
+  return true;
 }

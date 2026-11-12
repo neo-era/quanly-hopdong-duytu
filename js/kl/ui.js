@@ -1002,7 +1002,9 @@ async function xuatExcel() {
     ${S.phuLuc.some((p) => p.nhap || p.loai === 'KHAC') ? '<p class="muted">Phụ lục nháp (đề xuất từ khảo sát) và nhóm "Khác" cũ không xuất — chuyển nháp sang đợt phụ lục ở tab Vị trí.</p>' : ''}
     <p class="muted">Phụ lục trình Sở đánh số La Mã theo thứ tự mẫu (Hạ ngầm, Thay sửa tủ, HPS→LED, Thay trụ…). KL Trung tâm xuất thành Biểu TT-01, TT-02… kèm sheet TongHop_TT theo gói × mã HM.</p>
     <label class="fld"><span>Xuất theo gói</span><select data-xg><option value="">Tất cả gói</option>${goiList(S).map((g) => `<option value="${g}">${goiTen(g)}</option>`).join('')}</select></label>
-    ${S.phuLuc.filter((p) => !p.nhap && p.loai !== 'KHAC').map((p) => `<label class="kl-chk"><input type="checkbox" data-xp="${p.id}" checked> ${esc(tenPL(p))} — ${esc(p.sheet)}${p.dot ? ' · ' + esc(p.dot) : ''} <span class="kl-sub">(${fmt(S.viTri.filter((v) => v.plId === p.id).length, 0)} vị trí)</span></label>`).join('')}
+    ${(() => { const moi = new Map(); for (const p of S.phuLuc.filter((p) => !p.nhap && p.loai !== 'KHAC')) { const k = p.loai + '|' + K.kenhPL(p); const o = moi.get(k); if (!o || String(p.ngayNhap || '') > String(o.ngayNhap || '')) moi.set(k, p); } ui._xMoi = new Set([...moi.values()].map((p) => p.id)); return ''; })()}
+    <p class="muted">Mặc định chọn đợt mới nhất của mỗi loại (mỗi loại trình Sở chỉ xuất 1 phụ lục / lần để đánh số La Mã không trùng).</p>
+    ${S.phuLuc.filter((p) => !p.nhap && p.loai !== 'KHAC').map((p) => `<label class="kl-chk"><input type="checkbox" data-xp="${p.id}" ${ui._xMoi.has(p.id) ? 'checked' : ''}> ${esc(tenPL(p))} — ${esc(p.sheet)}${p.dot ? ' · ' + esc(p.dot) : ''} <span class="kl-sub">(${fmt(S.viTri.filter((v) => v.plId === p.id).length, 0)} vị trí)</span></label>`).join('')}
     <div class="sheet-f"><button class="btn ghost" data-x>Huỷ</button><button class="btn amber" data-ap>⇪ Tải file .xlsx</button></div>`, {
     onMount: (el, close) => { el.querySelector('[data-ap]').onclick = async (e) => {
       const ids = [...el.querySelectorAll('[data-xp]:checked')].map((x) => x.dataset.xp);

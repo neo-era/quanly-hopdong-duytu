@@ -486,6 +486,8 @@ eq(S.docSo('1.5'), 1.5, '"1.5" thập phân');
   eq(kq2.them, 1, 'đặt TT → khác kênh, vẫn thêm');
   const xt3 = S.xemTruoc(st, [TRU({ STT: 'D2', 'Tuyến đường': 'Lê Văn Sỹ', Phường: 'Nhiêu Lộc', 'Tủ điều khiển': 'TĐK LVS-01', 'Trình Sở': 'Không trình Sở' })], { namKH: 2026 });
   eq(xt3.items[0].trungKhacKenh, true, 'xem trước: nhãn trùng vị trí khác kênh');
+  const xt4 = S.xemTruoc(kho(), [TRU({ STT: 'G1', 'Tuyến đường': 'Pasteur', Phường: 'Bàn Cờ', 'Tủ điều khiển': 'TĐK P', 'Trình Sở': 'Trình Sở' }), TRU({ STT: 'G2', 'Tuyến đường': 'Pasteur', Phường: 'Bàn Cờ', 'Tủ điều khiển': 'TĐK P', 'Trình Sở': 'Không trình Sở' })], { namKH: 2026 });
+  eq(xt4.items.map((i) => i.trungKhacKenh), [true, true], 'cùng lượt: 2 bản cùng vị trí khác kênh đều gắn nhãn');
 }
 {
   const st = kho();
@@ -507,7 +509,10 @@ eq(S.docSo('1.5'), 1.5, '"1.5" thập phân');
   eq(S.kiemXuat(st, ['pl1', 'pl9'], { goi: 'G2' }).filter((c) => /cùng loại/.test(c.lyDo)).length, 0, 'xuất theo gói: phụ lục không có vị trí gói đó không tính');
   st.phuLuc.push({ id: 'plT', loai: 'PLIII', kenh: 'TT', sheet: 'TT', file: '', namKH: 2026, dot: 'Đợt 1', nhom: [] });
   st.viTri.push({ id: 'z2', plId: 'plT', stt: 1, tram: 'X', phuong: 'Bàn Cờ', tuyen: 'Y', nhom: 'Bàn Cờ', kl: 1, goi: 'G1', chiTiet: [], trangThai: 'chua', nguon: { ks: 'thay_tru#Z', type: 'thay_tru', thuocSo: false } });
-  ok(S.kiemXuat(st, ['plT']).some((c) => /Chưa gắn mã HM/.test(c.lyDo)), 'chặn xuất vị trí KS chưa gắn mã HM');
+  ok(S.kiemXuat(st, ['plT']).some((c) => /Chưa gắn mã HM/.test(c.lyDo)), 'chặn xuất vị trí KS kênh TT chưa gắn mã HM');
+  { const z3 = { ...st.viTri.find((v) => v.id === 'z2'), id: 'z3', plId: 'pl9' }; st.viTri.push(z3);
+    ok(!S.kiemXuat(st, ['pl9']).some((c) => /mã HM/.test(c.lyDo)) && S.canhBaoXuat(st, ['pl9']).some((c) => /chưa gắn mã HM/.test(c.lyDo)), 'trình Sở chưa có mã HM: chỉ cảnh báo');
+    st.viTri.pop(); }
   ok(S.canhBaoXuat(st, ['pl9', 'plT'])[0]?.vt.length === 2, 'cảnh báo vị trí có ở cả TS và TT');
 }
 {

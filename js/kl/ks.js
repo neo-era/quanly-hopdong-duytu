@@ -186,6 +186,7 @@ export function xemTruoc(st, rows, opts = {}) {
   const dem = { moi: 0, thayDoi: 0, trungPL: 0, thieuKL: 0, xoa: 0, sttTrung: 0, chuaPL: 0, TS: 0, TT: 0 };
   // Cùng loại + vị trí đã có ở kênh kia → nhãn "trùng vị trí khác kênh" (không chặn — H2)
   const kenhKhoa = new Map();
+  const loTrongLuot = new Map();   // cùng lượt lấy: 2 bản cùng vị trí khác kênh cũng gắn nhãn
   for (const v of st.viTri) { const p = plLoai.get(v.plId); if (!p || v.nguon?.ks) continue; const k = p.loai + '§' + keyKS(v); if (!kenhKhoa.has(k)) kenhKhoa.set(k, new Set()); kenhKhoa.get(k).add(kenhPL(p)); }
   const sttCount = new Map();
   for (const r of rows) if (KS_MAP[r?._type] && !txt(r['Deleted At'])) { const k = r._type + '#' + txt(r.STT); sttCount.set(k, (sttCount.get(k) || 0) + 1); }
@@ -222,9 +223,11 @@ export function xemTruoc(st, rows, opts = {}) {
       viTriId: cu?.id || null };
     items.push(it);
     if (dem[trangThai] !== undefined) dem[trangThai]++;
+    if (kenh && (trangThai === 'moi' || trangThai === 'thayDoi')) { const k = a.dich + '§' + keyKS(a.vt); if (!loTrongLuot.has(k)) loTrongLuot.set(k, []); loTrongLuot.get(k).push(it); }
     if (trangThai === 'moi' || trangThai === 'thayDoi') { if (kenh) dem[kenh]++; else dem.chuaPL++; }
     if (thieuKL && trangThai !== 'daCo' && trangThai !== 'trungPL' && trangThai !== 'sttTrung') dem.thieuKL++;
   }
+  for (const ds of loTrongLuot.values()) if (new Set(ds.map((x) => x.kenh)).size > 1) ds.forEach((x) => { x.trungKhacKenh = true; });
   return { items, dem };
 }
 
@@ -434,7 +437,8 @@ export function kiemXuat(st, plIds, opts = {}) {
     const dem = new Map();
     for (const v of st.viTri) {
       if (v.plId !== id || !v.nguon?.ks || (opts.goi && v.goi !== opts.goi)) continue;
-      const ly = lyDoChan(st, v, pl) || (!(v.chiTiet || []).length ? 'Chưa gắn mã HM (không tính được tiền và cột X)' : '');
+      // KL TT tính tiền theo mã HM → chặn; phụ lục trình Sở không cần mã HM → chỉ cảnh báo (canhBaoXuat)
+      const ly = lyDoChan(st, v, pl) || (kenhPL(pl) === 'TT' && !(v.chiTiet || []).length ? 'Chưa gắn mã HM (không tính được tiền KL Trung tâm và cột X)' : '');
       if (ly) dem.set(ly, (dem.get(ly) || 0) + 1);
     }
     for (const [lyDo, n] of dem) out.push({ plId: id, sheet: pl.sheet, lyDo, n });
@@ -455,7 +459,10 @@ export function canhBaoXuat(st, plIds) {
     const o = kenhTheoKhoa.get(k); o.kenh.add(kenhPL(pl)); if (ids.has(v.plId)) o.vt.push(v);
   }
   const trung = [...kenhTheoKhoa.values()].filter((o) => o.kenh.size > 1 && o.vt.length).flatMap((o) => o.vt);
-  return trung.length ? [{ lyDo: `${trung.length} vị trí cùng loại, cùng trạm + phường + tuyến có ở cả phụ lục trình Sở và KL Trung tâm — kiểm tra để không thanh toán 2 lần`, vt: trung.slice(0, 20).map((v) => v.tram + ' · ' + v.tuyen) }] : [];
+  const out = trung.length ? [{ lyDo: `${trung.length} vị trí cùng loại, cùng trạm + phường + tuyến có ở cả phụ lục trình Sở và KL Trung tâm — kiểm tra để không thanh toán 2 lần.`, vt: trung.slice(0, 20).map((v) => v.tram + ' · ' + v.tuyen) }] : [];
+  const khongMa = st.viTri.filter((v) => ids.has(v.plId) && v.nguon?.ks && kenhPL(plMap.get(v.plId)) === 'TS' && !(v.chiTiet || []).length);
+  if (khongMa.length) out.push({ lyDo: `${khongMa.length} vị trí trình Sở lấy từ khảo sát chưa gắn mã HM — cột X của các vị trí này chưa đáng tin.`, vt: khongMa.slice(0, 20).map((v) => v.tram + ' · ' + v.tuyen) });
+  return out;
 }
 
 /** Nhãn phụ lục của 1 vị trí cho app Khảo sát. */

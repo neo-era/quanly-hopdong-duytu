@@ -4,7 +4,8 @@
 import * as KS from './ks.js';
 import { ksLinkInfo, ksLink, ksUnlink, ksPhienMay, ksList, ksPush } from './ksapi.js';
 
-const NHOM = [['PLIII', 'PL III — Thay trụ'], ['PLII', 'PL II — Thay đèn (KL cột J nhập sau)'], ['PLIV', 'PL IV — Trụ trang trí'], ['KHAC', 'Khác — ngoài phụ lục'],
+// Nhóm theo kênh người khảo sát chọn (doc 05, Chốt UI phương án A): Trình Sở → phụ lục trình Sở; Không trình Sở → KL Trung tâm
+const NHOM = [['TS', 'Trình Sở → phụ lục trình Sở'], ['TT', 'Không trình Sở → KL Trung tâm'], ['CHUA', 'Chưa phân loại — chọn kênh trước khi thêm'],
   ['TRUNG', 'Trùng phụ lục đã nhập / STT trùng'], ['XOA', 'Bản khảo sát đã bị xoá']];
 const PILL = { moi: ['new', 'Mới'], thayDoi: ['chg', 'Thay đổi'], trungPL: ['dup', 'Trùng PL'], sttTrung: ['bad', 'STT trùng'], xoa: ['bad', 'Nguồn đã xoá'], daCo: ['dup', 'Đã lấy'] };
 const PAGE = 50;
@@ -64,14 +65,17 @@ export function moLayKS(c) {
   const S = st();
   const nam = new Date().getFullYear();
   const L = { types: Object.keys(KS.KS_MAP).filter((t) => !KS.KS_MAP[t].tat), layThem: [], from: `${nam}-01-01`, to: homNay(), phuong: '', namKH: nam,
-    xt: null, loi: {}, tai: false, tienDo: '', loc: '', mo: new Set(['PLIII', 'PLII', 'KHAC']), trang: {}, chiTiet: '', chonGoi: {}, chonDich: {} };
+    xt: null, loi: {}, tai: false, tienDo: '', loc: '', mo: new Set(['TS', 'TT', 'CHUA']), trang: {}, chiTiet: '', chonGoi: {}, chonDich: {}, chonKenh: {} };
   const goiAll = [...new Set(['G1', 'G2', 'G3', 'G4', ...S.viTri.map((v) => v.goi).filter(Boolean)])].sort();
-  const nhomCua = (it) => (['trungPL', 'sttTrung'].includes(it.trangThai) ? 'TRUNG' : it.trangThai === 'xoa' ? 'XOA' : (L.chonDich[it.key] || it.dich));
+  const kenhCua = (it) => L.chonKenh[it.key] || it.kenh || '';
+  const nhomCua = (it) => (['trungPL', 'sttTrung'].includes(it.trangThai) ? 'TRUNG' : it.trangThai === 'xoa' ? 'XOA' : (kenhCua(it) || 'CHUA'));
   const hien = () => (L.xt?.items || []).filter((it) => it.trangThai !== 'daCo')
     .filter((it) => !L.phuong || c.norm(it.vt.phuong).includes(c.norm(L.phuong)))
-    .filter((it) => !L.loc || (L.loc === 'thieuKL' ? it.thieuKL : it.trangThai === L.loc));
+    .filter((it) => !L.loc || (L.loc === 'thieuKL' ? it.thieuKL : L.loc === 'chuaPL' ? !kenhCua(it) && it.trangThai !== 'xoa' : it.trangThai === L.loc));
   const goiCua = (it) => L.chonGoi[it.key] || (it.goi && it.goi !== 'nhieu' ? it.goi : '');
-  const chonDuoc = (it) => !['trungPL', 'sttTrung', 'daCo'].includes(it.trangThai);
+  // Bản mới chưa có kênh: phải chọn Trình Sở / KL Trung tâm trước mới chọn thêm được
+  const chonDuoc = (it) => !['trungPL', 'sttTrung', 'daCo'].includes(it.trangThai) && !(it.trangThai === 'moi' && !kenhCua(it));
+  const ranhKenh = (it) => it.trangThai === 'moi' && !KS.KS_MAP[it.type]?.luonTT;
   const chon = () => hien().filter((it) => it.chon && chonDuoc(it));
 
   const rowHTML = (it) => {
@@ -83,28 +87,29 @@ export function moLayKS(c) {
       ${cd ? `<span class="chk ${it.chon ? '' : 'off'}" aria-hidden="true">${it.chon ? '✓' : ''}</span>` : '<span class="chk off ks-x" aria-hidden="true">–</span>'}
       <div class="m"><div class="t">${esc(it.stt)} · ${esc(it.vt.tuyen || '—')}</div>
         <div class="kl-sub">${esc(it.vt.phuong || '—')} · ${esc(it.vt.tram || '—')}${it.vt.lyTrinhDau ? ' · ' + esc(it.vt.lyTrinhDau) : ''}</div>
-        <div class="ks-ma">${it.coMau ? '<span class="kl-sub">theo mẫu chi tiết HM</span>' : it.goiY ? `<span class="kl-chip ${it.goiY.chac ? '' : 'ks-chua'}" title="${esc(it.goiY.ly)}">${esc(it.goiY.ma)}${it.goiY.chac ? '' : ' ?'}</span>` : '<span class="ks-pill bad">chưa có mã HM</span>'}</div></div>
+        <div class="ks-ma">${it.coMau ? '<span class="kl-sub">theo mẫu chi tiết HM</span>' : it.goiY ? `<span class="kl-chip ${it.goiY.chac ? '' : 'ks-chua'}" title="${esc(it.goiY.ly)}">${esc(it.goiY.ma)}${it.goiY.chac ? '' : ' ?'}</span>` : '<span class="ks-pill bad">chưa có mã HM</span>'}</div>        ${ranhKenh(it) && !kenhCua(it) ? `<div class="ks-kn" role="group" aria-label="Chọn kênh cho ${esc(it.stt)}"><button class="btn ghost sm ks-44" data-kenh="TS" data-kk="${esc(it.key)}">Trình Sở</button><button class="btn ghost sm ks-44" data-kenh="TT" data-kk="${esc(it.key)}">KL TT</button></div>` : ''}</div>
       <div class="k"><b class="n">${it.vt.kl === null ? '—' : fmt(it.vt.kl)}</b> <span class="kl-sub">${esc(it.dvt || '')}</span>
-        <div class="ks-pills">${pt ? `<span class="ks-pill ${pc}">${pt}</span>` : ''}${it.thieuKL ? `<span class="ks-pill bad">${it.dich === 'PLII' ? 'KL J nhập sau' : 'Thiếu KL'}</span>` : ''}${it.goiYPLIV ? '<span class="ks-pill chg">Trang trí?</span>' : ''}${it.daVaoDot ? '<span class="ks-pill chg">Đã vào đợt — xem kỹ</span>' : ''}${it.vt.ksChon ? '<span class="ks-pill" title="Người khảo sát chọn mã HĐ ngay trong form">KS chọn mã</span>' : ''}${it.goiKS ? '<span class="ks-pill chg" title="Phường chưa có trong phụ lục thật — gói do người khảo sát chọn">Gói KS chọn</span>' : ''}${it.lechGoi ? '<span class="ks-pill bad" title="Gói người khảo sát chọn khác gói của phường trong phụ lục thật">Lệch gói</span>' : ''}</div></div>
+        <div class="ks-pills"><span class="ks-pill" title="Phụ lục đích">${esc(KS.tenDich(it.dich).split(' · ').pop())}</span>${pt ? `<span class="ks-pill ${pc}">${pt}</span>` : ''}${it.thieuKL ? '<span class="ks-pill bad">Thiếu KL</span>' : ''}${it.kenhLoi ? `<span class="ks-pill bad" title="${esc(it.kenhLoi)}">HPS không vào PL tăng cường</span>` : ''}${L.chonKenh[it.key] ? '<span class="ks-pill chg">VP đặt kênh</span>' : ''}${it.trungKhacKenh ? `<span class="ks-pill bad" title="Vị trí này đã có ở ${it.kenh === 'TT' ? 'phụ lục trình Sở' : 'KL Trung tâm'} — kiểm tra để không thanh toán 2 lần">Trùng vị trí khác kênh</span>` : ''}${it.trangThai === 'thayDoi' && it.kenhKS && it.kenhKS !== it.kenh ? `<span class="ks-pill chg">KS đổi → ${it.kenhKS === 'TT' ? 'KL TT' : 'Trình Sở'}</span>` : ''}${it.daVaoDot ? '<span class="ks-pill chg">Đã vào đợt — xem kỹ</span>' : ''}${it.vt.ksChon ? '<span class="ks-pill" title="Người khảo sát chọn mã HĐ ngay trong form">KS chọn mã</span>' : ''}${it.goiKS ? '<span class="ks-pill chg" title="Phường chưa có trong phụ lục thật — gói do người khảo sát chọn">Gói KS chọn</span>' : ''}${it.lechGoi ? '<span class="ks-pill bad" title="Gói người khảo sát chọn khác gói của phường trong phụ lục thật">Lệch gói</span>' : ''}</div></div>
       ${canGoi ? `<select class="ks-goi" data-goi="${esc(it.key)}" aria-label="Chọn gói cho ${esc(it.stt)}"><option value="">${it.goi === 'nhieu' ? 'Nhiều gói – chọn' : 'Chưa rõ gói'}</option>${(it.goiList.length ? it.goiList : goiAll).map((x) => `<option value="${x}" ${g === x ? 'selected' : ''}>${goiTen(x)}</option>`).join('')}</select>`
         : `<span class="ks-g">${goiTen(g)}</span>`}
       <button class="ks-i" data-ct="${esc(it.key)}" aria-label="Chi tiết ${esc(it.stt)}" aria-expanded="${L.chiTiet === it.key}">ⓘ</button>
     </div>${L.chiTiet === it.key ? ctHTML(it) : ''}`;
   };
   const ctHTML = (it) => `<div class="ks-ct" role="region" aria-label="Chi tiết ${esc(it.stt)}">
-    <div class="kv"><span>Khảo sát</span><b>${esc(KS.KS_MAP[it.type]?.ten)} · ${esc(it.stt)}</b><span>Đích</span><b>${esc(KS.TEN_DICH[L.chonDich[it.key] || it.dich])}</b>
+    <div class="kv"><span>Khảo sát</span><b>${esc(KS.KS_MAP[it.type]?.ten)} · ${esc(it.stt)}</b><span>Đích</span><b>${esc(KS.tenDich(L.chonDich[it.key] || it.dich))}</b>
+      <span>Kênh</span><b>${kenhCua(it) ? (kenhCua(it) === 'TT' ? 'Không trình Sở — KL Trung tâm' : 'Trình Sở — phụ lục trình Sở') : 'Chưa phân loại'}${it.kenhKS ? ' · KS chọn ' + (it.kenhKS === 'TT' ? 'Không trình Sở' : 'Trình Sở') : it.kenhLoi ? ' · ' + esc(it.kenhLoi) : ' · KS chưa chọn (bản cũ)'}</b>
       <span>Trạm · tuyến</span><b>${esc(it.vt.tram)} · ${esc(it.vt.tuyen)}</b>${it.vt.lyTrinhDau ? `<span>Lý trình</span><b>${esc(it.vt.lyTrinhDau)}${it.vt.lyTrinhCuoi ? ' → ' + esc(it.vt.lyTrinhCuoi) : ''}</b>` : ''}
-      ${it.vt.hienHuu !== undefined ? `<span>Đèn hiện hữu (cột G)</span><b>${fmt(it.vt.hienHuu)}</b>` : ''}${it.vt.namLD ? `<span>Năm lắp đặt</span><b>${esc(it.vt.namLD)}</b>` : ''}
+      ${it.vt.hienHuu !== undefined && it.dich === 'PLII' ? `<span>Đèn hiện hữu (cột G)</span><b>${fmt(it.vt.hienHuu)}</b>` : ''}${it.vt.namLD ? `<span>Năm lắp đặt</span><b>${esc(it.vt.namLD)}</b>` : ''}
       ${it.vt.ghiChu ? `<span>Ghi chú</span><b>${esc(it.vt.ghiChu)}</b>` : ''}
-      <span>Mã HM</span><b>${it.coMau ? 'theo mẫu chi tiết HM đã khai' : it.goiY ? `${esc(it.goiY.ma)} · ${esc(c.st().catalog[it.goiY.ma]?.ten || '')} — ${esc(it.goiY.ly)}${it.goiY.chac ? '' : ' (cần xem lại)'}` : 'chưa xác định — gắn tay ở tab Vị trí hoặc khai mẫu'}</b><span>Thuộc Sở</span><b>chưa xác minh — xác nhận ở tab Vị trí trước khi chuyển đợt</b></div>
-    ${it.type === 'thay_tru' ? `<label class="kl-chk ks-44"><input type="checkbox" data-pliv="${esc(it.key)}" ${L.chonDich[it.key] === 'PLIV' ? 'checked' : ''}> Đưa vào PL IV (trụ trang trí)</label>` : ''}
+      <span>Mã HM</span><b>${it.coMau ? 'theo mẫu chi tiết HM đã khai' : it.goiY ? `${esc(it.goiY.ma)} · ${esc(c.st().catalog[it.goiY.ma]?.ten || '')} — ${esc(it.goiY.ly)}${it.goiY.chac ? '' : ' (cần xem lại)'}` : 'chưa xác định — gắn tay ở tab Vị trí hoặc khai mẫu'}</b>${kenhCua(it) === 'TS' ? '<span>Thuộc Sở</span><b>chưa xác minh — xác nhận ở tab Vị trí trước khi chuyển đợt</b>' : ''}</div>
+    ${ranhKenh(it) ? `<div class="ks-kn" role="group" aria-label="Văn phòng đặt kênh"><button class="btn ${kenhCua(it) === 'TS' ? 'amber' : 'ghost'} sm ks-44" data-kenh="TS" data-kk="${esc(it.key)}" aria-pressed="${kenhCua(it) === 'TS'}">Đặt Trình Sở</button><button class="btn ${kenhCua(it) === 'TT' ? 'amber' : 'ghost'} sm ks-44" data-kenh="TT" data-kk="${esc(it.key)}" aria-pressed="${kenhCua(it) === 'TT'}">Đặt KL Trung tâm</button></div>` : ''}
     ${/^https?:\/\//i.test(it.vt.link || '') ? `<a class="btn ghost sm" href="${esc(it.vt.link)}" target="_blank" rel="noopener">Mở bản đồ</a>` : ''}</div>`;
 
   const body = () => {
     if (!L.xt) {
       return `<div class="ks-flt">
         <details class="ks-dd"><summary class="ks-chip on">Loại: ${L.types.length} ▾</summary><div class="ks-ddb">
-          ${Object.entries(KS.KS_MAP).map(([k, M]) => `<label class="kl-chk ks-44"><input type="checkbox" data-ty="${k}" ${L.types.includes(k) ? 'checked' : ''}> ${esc(M.ten)} → ${esc(KS.TEN_DICH[M.dich].split(' · ')[0])}${M.tat ? ' <span class="kl-sub">(mặc định không lấy)</span>' : ''}</label>`).join('')}</div></details>
+          ${Object.entries(KS.KS_MAP).map(([k, M]) => `<label class="kl-chk ks-44"><input type="checkbox" data-ty="${k}" ${L.types.includes(k) ? 'checked' : ''}> ${esc(M.ten)} → ${esc(KS.tenDich(M.dich).split(' · ').pop())}${M.luonTT ? ' (luôn KL TT)' : ''}${M.tat ? ' <span class="kl-sub">(mặc định không lấy)</span>' : ''}</label>`).join('')}</div></details>
         <label class="fld"><span>Từ ngày</span><input type="date" class="kl-in" data-from value="${L.from}"></label>
         <label class="fld"><span>Đến ngày</span><input type="date" class="kl-in" data-to value="${L.to}"></label>
         <label class="fld"><span>Phường (lọc)</span><input class="kl-in" data-ph value="${esc(L.phuong)}" placeholder="vd Bàn Cờ"></label>
@@ -123,7 +128,7 @@ export function moLayKS(c) {
         <label class="ks-chip"><span class="sr">Phường</span><input data-ph value="${esc(L.phuong)}" placeholder="Lọc phường…" aria-label="Lọc phường"></label>
         <span class="ks-chip">Năm KH ${L.namKH}</span><button class="ks-chip" data-lai>↺ Lọc lại</button></div>
       ${Object.keys(L.loi).length ? `<p class="ks-err">${Object.entries(L.loi).map(([t, m]) => `${esc(KS.KS_MAP[t]?.ten || t)}: ${esc(m)} <button class="btn ghost sm" data-lai>Thử lại</button>`).join('<br>')}</p>` : ''}
-      <div class="ks-tiles">${tile('moi', d.moi, 'mới', 'g')}${tile('thayDoi', d.thayDoi, 'thay đổi', 'y')}${tile('trungPL', d.trungPL, 'trùng PL', '')}${tile('thieuKL', d.thieuKL, 'thiếu KL', 'r')}</div>
+      <div class="ks-tiles">${tile('moi', d.moi, 'mới', 'g')}${tile('thayDoi', d.thayDoi, 'thay đổi', 'y')}${tile('trungPL', d.trungPL, 'trùng PL', '')}${tile('thieuKL', d.thieuKL, 'thiếu KL', 'r')}${tile('chuaPL', L.xt.items.filter((it) => it.trangThai === 'moi' && !kenhCua(it)).length, 'chưa phân loại', 'r')}</div>
       ${daCo ? `<p class="muted">${fmt(daCo, 0)} bản đã lấy trước đây, không đổi — ẩn.</p>` : ''}
       ${groups.length ? groups.map(([g, t, a]) => {
         const sel = a.filter(chonDuoc);
@@ -132,13 +137,14 @@ export function moLayKS(c) {
         const lim = L.trang[g] || PAGE;
         return `<section class="ks-grp"><div class="ks-gh">
           ${sel.length ? `<input type="checkbox" class="ks-gcb" data-gall="${g}" ${nOn === sel.length ? 'checked' : ''} data-ind="${nOn > 0 && nOn < sel.length ? 1 : 0}" aria-label="Chọn cả nhóm ${esc(t)}">` : '<span class="ks-gcb" aria-hidden="true"></span>'}
-          <button class="ks-gt" data-mo="${g}" aria-expanded="${open}"><b>${esc(t)}</b><span class="kl-sub">${sel.length ? `${nOn}/${sel.length}` : 'không thêm'} · ${fmt(a.reduce((s, x) => s + (+x.vt.kl || 0), 0))}</span><span aria-hidden="true">${open ? '▾' : '▸'}</span></button></div>
+          <button class="ks-gt" data-mo="${g}" aria-expanded="${open}"><b>${esc(t)}</b><span class="kl-sub">${sel.length ? `chọn ${nOn}/${sel.length}` : `${fmt(a.length, 0)} bản`} · KL ${fmt(a.reduce((s, x) => s + (+x.vt.kl || 0), 0))}</span><span aria-hidden="true">${open ? '▾' : '▸'}</span></button></div>
           ${open ? a.slice(0, lim).map(rowHTML).join('') + (a.length > lim ? `<button class="btn ghost ks-w" data-trang="${g}">Hiện thêm ${fmt(Math.min(PAGE, a.length - lim), 0)} / còn ${fmt(a.length - lim, 0)}</button>` : '') : ''}</section>`;
       }).join('') : '<div class="kl-empty"><h3>Không có bản ghi trong khoảng đã lọc</h3></div>'}`;
   };
   const foot = () => {
     const n = chon().length;
-    return `<span class="ks-ft">→ <b>phụ lục nháp</b> · năm ${L.namKH} · không cộng vào "Đã vào KH"</span>
+    const nTT = chon().filter((it) => kenhCua(it) === 'TT').length;
+    return `<span class="ks-ft">→ <b>phụ lục nháp</b> · năm ${L.namKH}${n ? ` · ${fmt(n - nTT, 0)} trình Sở / ${fmt(nTT, 0)} KL TT` : ''} · không cộng vào "Đã vào KH"</span>
       <button class="btn ghost" data-x>Huỷ</button>
       ${L.xt ? `<button class="btn amber" data-them ${n && !L.tai ? '' : 'disabled'}>Thêm ${fmt(n, 0)} vị trí</button>` : `<button class="btn amber" data-tai ${L.tai || !L.types.length ? 'disabled' : ''}>${L.tai ? 'Đang lấy…' : 'Lấy dữ liệu'}</button>`}`;
   };
@@ -171,15 +177,16 @@ export function moLayKS(c) {
         const loc = t.closest('[data-loc]'); if (loc) { L.loc = L.loc === loc.dataset.loc ? '' : loc.dataset.loc; return paint(); }
         const mo = t.closest('[data-mo]'); if (mo) { L.mo.has(mo.dataset.mo) ? L.mo.delete(mo.dataset.mo) : L.mo.add(mo.dataset.mo); return paint(); }
         const tr = t.closest('[data-trang]'); if (tr) { L.trang[tr.dataset.trang] = (L.trang[tr.dataset.trang] || PAGE) + PAGE; return paint(); }
+        const kn = t.closest('[data-kenh]'); if (kn) { const it = L.xt.items.find((x) => x.key === kn.dataset.kk); L.chonKenh[kn.dataset.kk] = kn.dataset.kenh; if (it) it.chon = true; return paint(); }
         const ct = t.closest('[data-ct]'); if (ct) { L.chiTiet = L.chiTiet === ct.dataset.ct ? '' : ct.dataset.ct; return paint(); }
         if (t.closest('select, input, a, label, details, summary')) return;
         const r = t.closest('[data-k]'); if (r) return toggle(r.dataset.k);
         if (t.closest('[data-them]')) {
           const items = chon();
           let k = {};
-          await api.mutate(() => { k = KS.apDung(S, items, { namKH: L.namKH, chonGoi: L.chonGoi, chonDich: L.chonDich }); });
+          await api.mutate(() => { k = KS.apDung(S, items, { namKH: L.namKH, chonGoi: L.chonGoi, chonDich: L.chonDich, chonKenh: L.chonKenh }); });
           close();
-          api.toast(`Đã thêm ${fmt(k.them || 0, 0)} · cập nhật ${fmt(k.capNhat || 0, 0)}${k.giuKL ? ` · ${k.giuKL} vị trí đã thực hiện giữ KL` : ''}${k.xoa ? ` · ${k.xoa} đánh dấu nguồn đã xoá` : ''} — vào phụ lục nháp.`, 'ok');
+          api.toast(`Đã thêm ${fmt(k.them || 0, 0)} · cập nhật ${fmt(k.capNhat || 0, 0)}${k.giuKL ? ` · ${k.giuKL} vị trí đã thực hiện giữ KL` : ''}${k.xoa ? ` · ${k.xoa} đánh dấu nguồn đã xoá` : ''}${k.doiKenh ? ` · ${k.doiKenh} chuyển kênh` : ''}${k.chuaPL ? ` · ${k.chuaPL} chưa phân loại bỏ qua` : ''} — vào phụ lục nháp.`, 'ok');
           rerender();
         }
       });
@@ -191,7 +198,6 @@ export function moLayKS(c) {
         if (t.dataset.to !== undefined) L.to = t.value;
         if (t.dataset.nam !== undefined) L.namKH = +t.value;
         if (t.dataset.goi) { L.chonGoi[t.dataset.goi] = t.value; const it = L.xt.items.find((x) => x.key === t.dataset.goi); if (it && t.value) it.chon = true; return paint(); }
-        if (t.dataset.pliv) { t.checked ? (L.chonDich[t.dataset.pliv] = 'PLIV') : delete L.chonDich[t.dataset.pliv]; return paint(); }
         if (t.dataset.gall) { const on = t.checked; hien().filter((it) => nhomCua(it) === t.dataset.gall && chonDuoc(it)).forEach((it) => { it.chon = on; }); return paint(); }
       });
       let ph = 0;

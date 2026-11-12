@@ -473,5 +473,52 @@ eq(S.docSo('1.5'), 1.5, '"1.5" thập phân');
   eq(K.ngoaiKHCua(st, st.phuLuc.find((p) => p.id === 'pl1')).get('v1'), 'X', 'vị trí từ file giữ đúng X của file');
 }
 
+// ---------- 13. Sau duyệt vòng 1: trùng khi văn phòng đặt kênh, CSKV, kiểm xuất, mẫu theo md ----------
+{
+  const st = kho();
+  // v1 (phụ lục thật PLIII, TS) ở TĐK LVS-01 / Nhiêu Lộc / Lê Văn Sỹ
+  const row = TRU({ STT: 'D1', 'Tuyến đường': 'Lê Văn Sỹ', Phường: 'Nhiêu Lộc', 'Tủ điều khiển': 'TĐK LVS-01', 'Trình Sở': '' });
+  const xt = S.xemTruoc(st, [row], { namKH: 2026 });
+  xt.items[0].chon = true;
+  const kq = S.apDung(st, xt.items, { namKH: 2026, chonKenh: { [xt.items[0].key]: 'TS' } });
+  eq([kq.them, kq.trungPL], [0, 1], 'văn phòng đặt TS cho bản chưa phân loại trùng phụ lục TS → không thêm, báo trùng');
+  const kq2 = S.apDung(st, S.xemTruoc(st, [row], { namKH: 2026 }).items.map((i) => ({ ...i, chon: true })), { namKH: 2026, chonKenh: { 'thay_tru#D1': 'TT' } });
+  eq(kq2.them, 1, 'đặt TT → khác kênh, vẫn thêm');
+  const xt3 = S.xemTruoc(st, [TRU({ STT: 'D2', 'Tuyến đường': 'Lê Văn Sỹ', Phường: 'Nhiêu Lộc', 'Tủ điều khiển': 'TĐK LVS-01', 'Trình Sở': 'Không trình Sở' })], { namKH: 2026 });
+  eq(xt3.items[0].trungKhacKenh, true, 'xem trước: nhãn trùng vị trí khác kênh');
+}
+{
+  const st = kho();
+  st.viTri.find((v) => v.id === 'v1').donVi = 'CS Trung tâm';
+  S.apDung(st, S.xemTruoc(st, [TRU({ STT: 'E1', 'Tuyến đường': 'Trần Quốc Thảo', Phường: 'Nhiêu Lộc', 'Tủ điều khiển': 'TĐK TQT' })], { namKH: 2026 }).items, { namKH: 2026 });
+  eq(st.viTri.find((v) => v.nguon?.ks === 'thay_tru#E1').donVi, 'CS Trung tâm', 'CSKV vị trí KS lấy theo phường trong phụ lục thật');
+}
+{
+  const st = kho();
+  st.mau.HANGAM = [{ ma: 'HM210', heSo: 1 }, { ma: 'HM300', heSo: 1, theo: 'kl2' }];
+  S.apDung(st, S.xemTruoc(st, [{ _type: 'ngam_hoa', 'Trình Sở': 'Trình Sở', STT: 'NH-9', 'Tuyến đường': 'A', Phường: 'Bàn Cờ', 'Tủ điều khiển': 'T', 'Số trụ': 4, 'Chiều dài cáp ngầm (md)': 150 }], { namKH: 2026 }).items, { namKH: 2026 });
+  eq(st.viTri.find((v) => v.nguon?.ks === 'ngam_hoa#NH-9').chiTiet, [{ ma: 'HM210', kl: 4 }, { ma: 'HM300', kl: 150 }], 'mẫu Hạ ngầm: mã tính theo trụ và theo md cáp');
+}
+{
+  const st = kho();
+  st.phuLuc.push({ id: 'pl9', loai: 'PLIII', sheet: 'PL III đợt 2', file: 'c.xlsx', namKH: 2026, dot: 'Đợt 2', nhom: [] });
+  st.viTri.push({ id: 'z1', plId: 'pl9', stt: 1, tram: 'X', phuong: 'Bàn Cờ', tuyen: 'Y', nhom: 'Bàn Cờ', kl: 1, goi: 'G1', chiTiet: [{ ma: 'HM210', kl: 1 }], trangThai: 'chua' });
+  ok(S.kiemXuat(st, ['pl1', 'pl9']).some((c) => /cùng loại/.test(c.lyDo)), 'chặn xuất 2 phụ lục trình Sở cùng loại (trùng số La Mã)');
+  eq(S.kiemXuat(st, ['pl1', 'pl9'], { goi: 'G2' }).filter((c) => /cùng loại/.test(c.lyDo)).length, 0, 'xuất theo gói: phụ lục không có vị trí gói đó không tính');
+  st.phuLuc.push({ id: 'plT', loai: 'PLIII', kenh: 'TT', sheet: 'TT', file: '', namKH: 2026, dot: 'Đợt 1', nhom: [] });
+  st.viTri.push({ id: 'z2', plId: 'plT', stt: 1, tram: 'X', phuong: 'Bàn Cờ', tuyen: 'Y', nhom: 'Bàn Cờ', kl: 1, goi: 'G1', chiTiet: [], trangThai: 'chua', nguon: { ks: 'thay_tru#Z', type: 'thay_tru', thuocSo: false } });
+  ok(S.kiemXuat(st, ['plT']).some((c) => /Chưa gắn mã HM/.test(c.lyDo)), 'chặn xuất vị trí KS chưa gắn mã HM');
+  ok(S.canhBaoXuat(st, ['pl9', 'plT'])[0]?.vt.length === 2, 'cảnh báo vị trí có ở cả TS và TT');
+}
+{
+  const st = kho();
+  S.apDung(st, S.xemTruoc(st, [TRU({ STT: 'F1' })], { namKH: 2026 }).items, { namKH: 2026 });
+  const v = st.viTri.find((x) => x.nguon?.ks === 'thay_tru#F1'); v.trangThai = 'da';
+  S.apDung(st, S.xemTruoc(st, [TRU({ STT: 'F1', 'Trình Sở': 'Không trình Sở' })], { namKH: 2026 }).items.map((i) => ({ ...i, chon: true })), { namKH: 2026 });
+  ok(v.nguon.doiTrinhSo, 'đã thực hiện + KS đổi TT → nhãn');
+  S.apDung(st, S.xemTruoc(st, [TRU({ STT: 'F1', 'Số lượng': 7 })], { namKH: 2026 }).items.map((i) => ({ ...i, chon: true })), { namKH: 2026 });
+  eq(v.nguon.doiTrinhSo, undefined, 'KS đổi lại TS (khớp kênh) → bỏ nhãn');
+}
+
 console.log(`\nks.test: ${pass} đạt, ${fail} lỗi`);
 if (fail) process.exit(1);

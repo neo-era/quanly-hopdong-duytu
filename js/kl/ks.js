@@ -51,7 +51,8 @@ export function docKenh(x) {
   return null;
 }
 export const TEN_KENH = { TS: 'Trình Sở', TT: 'KL Trung tâm' };
-const laHPS = (t) => /\b(hps|sodium|natri|cao ap)\b/.test(norm(t));
+// Cùng quy tắc với máy chủ (laDenHps_) và form (trinh-so.js): có chữ HPS/sodium/natri/cao áp mà KHÔNG có LED
+const laHPS = (t) => { const x = norm(t); return /\b(hps|sodium|natri|cao ap|son)\b/.test(x) && !/\bled\b/.test(x); };
 
 /** Đọc số: 6 · "1,5" · "30m" → số; chữ tự do / trống → null (không ghi 0, không đoán). */
 export function docSo(x) {
@@ -160,6 +161,13 @@ export function phuongGoi(st) {
   }
   return m;
 }
+/** CSKV của vị trí KS: theo vị trí phụ lục thật cùng phường (+ cùng gói nếu có), chỉ khi duy nhất. */
+export function donViTheoPhuong(st, phuong, goi) {
+  const real = new Set(st.phuLuc.filter((p) => !p.nhap && p.nguon !== 'KS').map((p) => p.id));
+  const k = norm(bo(phuong));
+  const ds = new Set(st.viTri.filter((v) => real.has(v.plId) && v.donVi && v.phuong && norm(bo(v.phuong)) === k && (!goi || !v.goi || v.goi === goi)).map((v) => v.donVi));
+  return ds.size === 1 ? [...ds][0] : '';
+}
 export function goiTheoPhuong(st, phuong, pg = phuongGoi(st)) {
   const list = [...(pg.get(norm(bo(phuong))) || [])].sort();
   return { goi: list.length === 1 ? list[0] : list.length > 1 ? 'nhieu' : null, list };
@@ -176,6 +184,9 @@ export function xemTruoc(st, rows, opts = {}) {
   // Khoá trùng phụ lục có kênh: TS và TT trùng vị trí không báo trùng nhau (doc 05 H2)
   const keyPL = new Set(st.viTri.filter((v) => !v.nguon?.ks && plLoai.get(v.plId)).map((v) => plLoai.get(v.plId).loai + '§' + kenhPL(plLoai.get(v.plId)) + '§' + keyKS(v)));
   const dem = { moi: 0, thayDoi: 0, trungPL: 0, thieuKL: 0, xoa: 0, sttTrung: 0, chuaPL: 0, TS: 0, TT: 0 };
+  // Cùng loại + vị trí đã có ở kênh kia → nhãn "trùng vị trí khác kênh" (không chặn — H2)
+  const kenhKhoa = new Map();
+  for (const v of st.viTri) { const p = plLoai.get(v.plId); if (!p || v.nguon?.ks) continue; const k = p.loai + '§' + keyKS(v); if (!kenhKhoa.has(k)) kenhKhoa.set(k, new Set()); kenhKhoa.get(k).add(kenhPL(p)); }
   const sttCount = new Map();
   for (const r of rows) if (KS_MAP[r?._type] && !txt(r['Deleted At'])) { const k = r._type + '#' + txt(r.STT); sttCount.set(k, (sttCount.get(k) || 0) + 1); }
   const plMap = new Map(st.phuLuc.map((p) => [p.id, p]));
@@ -205,6 +216,7 @@ export function xemTruoc(st, rows, opts = {}) {
     const kenh = cu ? kenhPL(plMap.get(cu.plId)) : a.kenh;
     const it = { key, type: a.type, stt: a.stt, dich: a.dich, dvt: a.dvt, vt: a.vt, trangThai, thieuKL, goiYPLIV: false, daVaoDot,
       kenh, kenhKS: a.kenh, kenhLoi: a.kenhLoi || '',
+      trungKhacKenh: !!kenh && [...(kenhKhoa.get(a.dich + '§' + keyKS(a.vt)) || [])].some((x) => x !== kenh),
       goiY: goiYCua(st, a.dich, a.type, a.vt.thuoc, { ksChon: kc, goi: goiVT }), coMau: mauCua(st, a.dich, a.type).some((m) => m.ma),
       goi: goiVT, goiKS, lechGoi, goiList: g.list, chon: (trangThai === 'moi' && !!kenh) || trangThai === 'xoa' || (trangThai === 'thayDoi' && !daVaoDot && cu?.trangThai !== 'da'),
       viTriId: cu?.id || null };
@@ -273,14 +285,14 @@ const mauCua = (st, loai, type) => (loai === LOAI_KHAC ? st.mau['KS:' + type] : 
 function chonHopLe(st, ksChon, goi) {
   return (ksChon?.ds || []).filter((d) => st.catalog?.[d.ma] && coTrongGoi(st.catalog[d.ma], goi));
 }
-function chiTietTu(st, loai, type, kl, thuoc, { theoMau = false, ksChon = null, goi = null } = {}) {
+function chiTietTu(st, loai, type, kl, thuoc, { theoMau = false, ksChon = null, goi = null, kl2 } = {}) {
   if (kl === null || kl === undefined) return [];
   if (!theoMau) {
     const ds = chonHopLe(st, ksChon, goi);
     if (ds.length) return ds.map((d) => ({ ma: d.ma, kl: Math.round(kl * d.heSo * heSoDVT(st.catalog[d.ma].dvt) * 1e6) / 1e6 }));
   }
   const mau = mauCua(st, loai, type).filter((m) => m.ma);
-  if (mau.length || theoMau) return apMau(mau, kl);
+  if (mau.length || theoMau) return apMau(mau, kl, kl2);
   return goiYMa(type, thuoc, kl, st.catalog, goi)?.chiTiet || [];
 }
 /** Gợi ý mã HM (để hiện cho người dùng xem lại): {ma, chac, ly} | null; null khi đang theo mẫu. */
@@ -296,6 +308,9 @@ export function goiYCua(st, loai, type, thuoc, { ksChon = null, goi = null } = {
 export function apDung(st, items, opts = {}) {
   const namKH = +opts.namKH || new Date().getFullYear();
   const kq = { them: 0, capNhat: 0, xoa: 0, giuKL: 0 };
+  // Khoá trùng theo kênh — kiểm lại cho bản văn phòng vừa đặt kênh (xemTruoc không kiểm được bản chưa phân loại)
+  const plMap0 = new Map(st.phuLuc.map((p) => [p.id, p]));
+  const keyPL = new Set(st.viTri.filter((v) => !v.nguon?.ks && plMap0.get(v.plId)).map((v) => plMap0.get(v.plId).loai + '§' + kenhPL(plMap0.get(v.plId)) + '§' + keyKS(v)));
   for (const it of items) {
     if (!it.chon) continue;
     const goi = opts.chonGoi?.[it.key] || (it.goi && it.goi !== 'nhieu' ? it.goi : null);
@@ -305,13 +320,15 @@ export function apDung(st, items, opts = {}) {
       const kenhTay = opts.chonKenh?.[it.key] === 'TT' || opts.chonKenh?.[it.key] === 'TS' ? opts.chonKenh[it.key] : null;
       const kenh = kenhTay || it.kenh;
       if (!kenh) { kq.chuaPL = (kq.chuaPL || 0) + 1; continue; }
+      if (kenhTay && keyPL.has(loai + '§' + kenh + '§' + keyKS(it.vt))) { kq.trungPL = (kq.trungPL || 0) + 1; continue; }
       const pl = plNhap(st, loai, namKH, kenh);
       if (it.vt.nhom && !pl.nhom.includes(it.vt.nhom)) pl.nhom.push(it.vt.nhom);
       const stt = st.viTri.filter((v) => v.plId === pl.id).length + 1;
       const o = { ksChon: it.vt.ksChon, goi };
-      st.viTri.push({ ...it.vt, nguon: { ...it.vt.nguon, type: it.type, stt: it.stt }, id: uid('vt'), plId: pl.id, stt, goi,
+      const donVi = it.vt.donVi || donViTheoPhuong(st, it.vt.phuong, goi);
+      st.viTri.push({ ...it.vt, donVi, nguon: { ...it.vt.nguon, type: it.type, stt: it.stt }, id: uid('vt'), plId: pl.id, stt, goi,
         ...(it.goiKS && goi === it.vt.ksChon?.goi ? { goiKS: true } : {}), ...(it.lechGoi ? { lechGoi: true } : {}), ...(kenhTay ? { kenhTay } : {}),
-        chiTiet: chiTietTu(st, loai, it.type, it.vt.kl, it.vt.thuoc, o), goiY: goiYCua(st, loai, it.type, it.vt.thuoc, o), chiTietSua: false, trangThai: 'chua', thangNT: '', thucHien: null });
+        chiTiet: chiTietTu(st, loai, it.type, it.vt.kl, it.vt.thuoc, { ...o, kl2: it.vt.kl2 }), goiY: goiYCua(st, loai, it.type, it.vt.thuoc, o), chiTietSua: false, trangThai: 'chua', thangNT: '', thucHien: null });
       kq.them++;
     } else if (it.trangThai === 'thayDoi') {
       const v = st.viTri.find((x) => x.id === it.viTriId);
@@ -319,10 +336,10 @@ export function apDung(st, items, opts = {}) {
       const pl = st.phuLuc.find((p) => p.id === v.plId);
       const kenhCu = kenhPL(pl), kenhMoi = it.vt.nguon.kenhKS;
       const nhanDoi = kenhMoi && kenhMoi !== (v.kenhTay || kenhCu) ? { tu: v.kenhTay || kenhCu, sang: kenhMoi } : undefined;
-      if (v.trangThai === 'da') { v.nguon = { ...v.nguon, doiSauTH: true, hash: it.vt.nguon.hash, kenhKS: kenhMoi, ...(nhanDoi ? { doiTrinhSo: nhanDoi } : {}) }; kq.giuKL++; continue; }
+      if (v.trangThai === 'da') { v.nguon = { ...v.nguon, doiSauTH: true, hash: it.vt.nguon.hash, kenhKS: kenhMoi, doiTrinhSo: nhanDoi }; if (!nhanDoi) delete v.nguon.doiTrinhSo; kq.giuKL++; continue; }
       const thuocSo = v.nguon?.thuocSo;
       const doiChon = JSON.stringify(v.ksChon || null) !== JSON.stringify(it.vt.ksChon || null);
-      const giu = { id: v.id, plId: v.plId, stt: v.stt, goi: goi || v.goi, donVi: v.donVi, trangThai: v.trangThai, thangNT: v.thangNT, thucHien: v.thucHien,
+      const giu = { id: v.id, plId: v.plId, stt: v.stt, goi: goi || v.goi, donVi: v.donVi || donViTheoPhuong(st, it.vt.phuong, goi || v.goi), trangThai: v.trangThai, thangNT: v.thangNT, thucHien: v.thucHien,
         chiTiet: v.chiTiet, chiTietSua: v.chiTietSua, ...(v.goiKS ? { goiKS: true } : {}), ...(v.goiDuyetKS !== undefined ? { goiDuyetKS: v.goiDuyetKS } : {}),
         ...(v.kenhTay ? { kenhTay: v.kenhTay } : {}), ...(v.ngoaiKHTay !== undefined ? { ngoaiKHTay: v.ngoaiKHTay } : {}) };
       for (const k of Object.keys(v)) delete v[k];
@@ -330,7 +347,7 @@ export function apDung(st, items, opts = {}) {
       // Văn phòng đã gán gói khi KS chọn gói này → không gắn lại cờ lệch (chỉ gắn khi KS đổi sang gói khác)
       if (it.lechGoi && v.goiDuyetKS !== (it.vt.ksChon?.goi ?? '')) v.lechGoi = true;
       const o = { ksChon: v.ksChon, goi: v.goi };
-      if (!v.chiTietSua) { v.chiTiet = chiTietTu(st, pl?.loai || loai, it.type, v.kl, v.thuoc, o); v.goiY = goiYCua(st, pl?.loai || loai, it.type, v.thuoc, o); }
+      if (!v.chiTietSua) { v.chiTiet = chiTietTu(st, pl?.loai || loai, it.type, v.kl, v.thuoc, { ...o, kl2: v.kl2 }); v.goiY = goiYCua(st, pl?.loai || loai, it.type, v.thuoc, o); }
       else if (doiChon) v.nguon.doiMa = true;   // KS đổi mã sau khi văn phòng đã sửa tay → chỉ gắn nhãn, không ghi đè
       // KS đổi Trình Sở ↔ Không trình Sở: nháp chưa thực hiện + văn phòng chưa đặt tay → chuyển kênh; còn lại chỉ gắn nhãn (doc 05 H2)
       if (nhanDoi) {
@@ -362,7 +379,7 @@ export function suaKL(st, id, kl) {
   if (!v) return false;
   const pl = st.phuLuc.find((p) => p.id === v.plId);
   v.kl = kl === '' || kl === null || kl === undefined ? null : docSo(kl);
-  if (!v.chiTietSua) v.chiTiet = chiTietTu(st, pl?.loai, v.nguon?.type, v.kl, v.thuoc, { ksChon: v.ksChon, goi: v.goi });
+  if (!v.chiTietSua) v.chiTiet = chiTietTu(st, pl?.loai, v.nguon?.type, v.kl, v.thuoc, { ksChon: v.ksChon, goi: v.goi, kl2: v.kl2 });
   return true;
 }
 
@@ -402,18 +419,43 @@ export function chuyenNhap(st, ids, { dot = '', nhomVon = '' } = {}) {
 }
 
 /** Kiểm trước khi xuất phụ lục trình Sở: [{plId, sheet, lyDo, n}] — rỗng là xuất được. */
-export function kiemXuat(st, plIds) {
+export function kiemXuat(st, plIds, opts = {}) {
   const out = [];
+  const coVT = (id) => st.viTri.some((v) => v.plId === id && (!opts.goi || v.goi === opts.goi));
+  // Mỗi loại phụ lục trình Sở chỉ 1 sheet / lần xuất — 2 phụ lục cùng loại sẽ trùng số La Mã
+  const theoLoai = new Map();
+  for (const id of plIds) { const pl = st.phuLuc.find((p) => p.id === id); if (!pl || pl.nhap || kenhPL(pl) !== 'TS' || !coVT(id)) continue; theoLoai.set(pl.loai, [...(theoLoai.get(pl.loai) || []), pl]); }
+  for (const [loai, ds] of theoLoai) if (ds.length > 1) out.push({ plId: ds[1].id, sheet: ds.map((p) => p.sheet + (p.dot ? ' · ' + p.dot : '')).join(' + '), lyDo: `${ds.length} phụ lục trình Sở cùng loại "${tenDich(loai).split(' · ').pop()}" — mỗi lần xuất chọn 1 phụ lục mỗi loại để đánh số đúng`, n: 0 });
   for (const id of plIds) {
     const pl = st.phuLuc.find((p) => p.id === id);
     if (!pl) continue;
     if (pl.nhap) { out.push({ plId: id, sheet: pl.sheet, lyDo: 'Phụ lục nháp (đề xuất từ khảo sát) — chuyển sang đợt thật trước khi xuất', n: 0 }); continue; }
     if (pl.loai === LOAI_KHAC) { out.push({ plId: id, sheet: pl.sheet, lyDo: 'Nhóm "Khác" không có mẫu phụ lục trình Sở', n: 0 }); continue; }
     const dem = new Map();
-    for (const v of st.viTri) if (v.plId === id && v.nguon?.ks) { const ly = lyDoChan(st, v, pl); if (ly) dem.set(ly, (dem.get(ly) || 0) + 1); }
+    for (const v of st.viTri) {
+      if (v.plId !== id || !v.nguon?.ks || (opts.goi && v.goi !== opts.goi)) continue;
+      const ly = lyDoChan(st, v, pl) || (!(v.chiTiet || []).length ? 'Chưa gắn mã HM (không tính được tiền và cột X)' : '');
+      if (ly) dem.set(ly, (dem.get(ly) || 0) + 1);
+    }
     for (const [lyDo, n] of dem) out.push({ plId: id, sheet: pl.sheet, lyDo, n });
   }
   return out;
+}
+
+/** Cảnh báo (không chặn) trước khi xuất: cùng loại + cùng vị trí nằm ở cả phụ lục trình Sở và KL Trung tâm → dễ thanh toán 2 lần. */
+export function canhBaoXuat(st, plIds) {
+  const plMap = new Map(st.phuLuc.map((p) => [p.id, p]));
+  const ids = new Set(plIds);
+  const kenhTheoKhoa = new Map();
+  for (const v of st.viTri) {
+    const pl = plMap.get(v.plId);
+    if (!pl || pl.nhap) continue;
+    const k = pl.loai + '§' + keyKS(v);
+    if (!kenhTheoKhoa.has(k)) kenhTheoKhoa.set(k, { kenh: new Set(), vt: [] });
+    const o = kenhTheoKhoa.get(k); o.kenh.add(kenhPL(pl)); if (ids.has(v.plId)) o.vt.push(v);
+  }
+  const trung = [...kenhTheoKhoa.values()].filter((o) => o.kenh.size > 1 && o.vt.length).flatMap((o) => o.vt);
+  return trung.length ? [{ lyDo: `${trung.length} vị trí cùng loại, cùng trạm + phường + tuyến có ở cả phụ lục trình Sở và KL Trung tâm — kiểm tra để không thanh toán 2 lần`, vt: trung.slice(0, 20).map((v) => v.tram + ' · ' + v.tuyen) }] : [];
 }
 
 /** Nhãn phụ lục của 1 vị trí cho app Khảo sát. */
@@ -484,7 +526,7 @@ export function apMauKS(st, type, ghiDe = false) {
   let n = 0;
   for (const v of st.viTri) {
     if (!ids.has(v.plId) || v.nguon?.type !== type || (v.chiTietSua && !ghiDe)) continue;
-    v.chiTiet = chiTietTu(st, 'KS:' + type, type, v.kl, v.thuoc, { theoMau: true }); v.goiY = null; v.chiTietSua = false; n++;
+    v.chiTiet = chiTietTu(st, 'KS:' + type, type, v.kl, v.thuoc, { theoMau: true, kl2: v.kl2 }); v.goiY = null; v.chiTietSua = false; n++;
   }
   return n;
 }

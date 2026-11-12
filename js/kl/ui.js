@@ -287,10 +287,11 @@ function renderMau(el) {
     <div class="kl-seg ks-seg" aria-label="Mẫu khuôn chung (lấy từ app Khảo sát)">${Object.entries(KS.KS_MAP).filter(([, M]) => /^KS:/.test(M.dich)).map(([k, M]) => `<button class="${'KS:' + k === L ? 'on' : ''}" data-mau="KS:${k}">Khác · ${esc(M.ten)}</button>`).join('')}</div>
     <p class="muted">1 ${esc(dvtMau(L))} ở ${esc(tenMau(L))} gồm những mã HM nào, mỗi mã bao nhiêu. Khi nhập phụ lục hoặc bấm "Gắn mẫu HM", app điền sẵn chi tiết = KL vị trí × hệ số; vị trí đã sửa tay được giữ nguyên.</p>
     <datalist id="klHM">${names.slice(0, 2500).map(([m, it]) => `<option value="${esc(m)}">${esc(it.ten)}</option>`).join('')}</datalist>
-    <div class="tablewrap"><table class="kl-tb"><thead><tr><th>Mã HM</th><th>Hạng mục (theo bảng giá HĐ)</th><th>ĐVT</th><th class="r">Hệ số / 1 ${esc(dvtMau(L))}</th><th></th></tr></thead><tbody>
+    <div class="tablewrap"><table class="kl-tb"><thead><tr><th>Mã HM</th><th>Hạng mục (theo bảng giá HĐ)</th><th>ĐVT</th><th class="r">Hệ số / 1 ${esc(dvtMau(L))}</th>${L === 'HANGAM' ? '<th>Tính theo</th>' : ''}<th></th></tr></thead><tbody>
     ${rows.map((m, i) => `<tr><td><input class="kl-in n" list="klHM" value="${esc(m.ma)}" data-mrow="${i}" data-mk="ma" aria-label="Mã HM"></td>
       <td>${esc(S.catalog[m.ma]?.ten || (m.ma ? '⚠ Không có trong danh mục HĐ' : ''))}</td><td>${esc(S.catalog[m.ma]?.dvt || '')}</td>
       <td class="r"><input class="kl-in n r" type="number" step="any" min="0" value="${esc(m.heSo)}" data-mrow="${i}" data-mk="heSo" aria-label="Hệ số"></td>
+      ${L === 'HANGAM' ? `<td><select class="kl-in" data-mrow="${i}" data-mk="theo" aria-label="Tính theo"><option value="">× số trụ</option><option value="kl2" ${m.theo === 'kl2' ? 'selected' : ''}>× mét cáp (md)</option></select></td>` : ''}
       <td><button class="ic del" data-mdel="${i}" aria-label="Xoá dòng">🗑</button></td></tr>`).join('') || '<tr><td colspan="5" class="empty">Chưa có dòng nào.</td></tr>'}
     </tbody></table></div>
     <div data-mpicker></div>
@@ -440,7 +441,7 @@ async function onChange(e) {
   const t = e.target, S = st();
   if (t.dataset.fsel) { ui.f[t.dataset.fsel] = t.value; ui.limit = PAGE; return rerender(); }
   if (t.dataset.dc) { if (t.dataset.dc === 'tatCa') ui.dc.tatCa = t.checked; else ui.dc[t.dataset.dc] = t.dataset.dc === 'nam' ? +t.value : t.value; if (t.dataset.dc !== 'phan' && t.dataset.dc !== 'tatCa') ui.dc.ma = ''; return rerender(); }
-  if (t.dataset.mrow !== undefined) { await api.mutate(() => { const m = S.mau[ui.mauLoai][+t.dataset.mrow]; m[t.dataset.mk] = t.dataset.mk === 'heSo' ? +t.value || 0 : t.value.trim().toUpperCase(); }); return rerender(); }
+  if (t.dataset.mrow !== undefined) { await api.mutate(() => { const m = S.mau[ui.mauLoai][+t.dataset.mrow]; if (t.dataset.mk === 'theo') { if (t.value) m.theo = t.value; else delete m.theo; } else m[t.dataset.mk] = t.dataset.mk === 'heSo' ? +t.value || 0 : t.value.trim().toUpperCase(); }); return rerender(); }
   if (t.dataset.mgt) { await api.mutate(() => { S.bangGia[t.dataset.mgt].maGoiThau = t.value.trim().toUpperCase(); }); api.toast('Đã cập nhật mã gói thầu.', 'ok'); return rerender(); }
   if (t.dataset.bdvc) { await api.mutate(() => { const b = S.bieuDV.find((x) => x.id === t.dataset.bdvc); b.chinh = +t.value; }); return rerender(); }
   if (t.dataset.pl) {
@@ -789,7 +790,7 @@ async function nhapPhuLuc() {
         <label class="fld"><span>Đợt</span><input class="kl-in" data-io="dot" data-i="${i}" value="${esc(trung ? trung.dot : [...new Set(r.viTri.map((v) => v.dot).filter(Boolean))][0] || '')}" placeholder="vd Đợt 2"></label>
         <label class="fld"><span>Nhóm vốn</span><input class="kl-in" data-io="nhomVon" data-i="${i}" value="${esc(trung?.nhomVon || '')}" placeholder="vd BSV (Đợt 2)-Nhóm 5"></label>
         <label class="fld"><span>Năm kế hoạch</span><input class="kl-in" type="number" data-io="namKH" data-i="${i}" value="${trung?.namKH || nam}"></label>
-        <label class="fld"><span>Kênh</span><select data-io="kenh" data-i="${i}"><option value="TS">Phụ lục trình Sở</option><option value="TT" ${/thẩm quyền trung tâm|không trình sở|^biểu tt/i.test((r.tieuDe || '') + ' ' + (r.title || '')) ? 'selected' : ''}>KL Trung tâm (không trình Sở)</option></select></label>
+        <label class="fld"><span>Kênh</span><select data-io="kenh" data-i="${i}"><option value="TS">Phụ lục trình Sở</option><option value="TT" ${r.kenh === 'TT' || /thẩm quyền trung tâm|không trình sở/i.test(r.tieuDe || '') ? 'selected' : ''}>KL Trung tâm (không trình Sở)</option></select></label>
         ${thieuGoi ? `<label class="fld"><span>${fmt(thieuGoi, 0)} vị trí chưa có gói — gán</span><select data-io="goiMacDinh" data-i="${i}"><option value="">Để trống (tự gán sau)</option>${goiList(S).map((g) => `<option value="${g}">${goiTen(g)}</option>`).join('')}</select></label>` : ''}
       </div></div>`;
   }).join('');
@@ -827,20 +828,24 @@ async function nhapThucHien() {
   const S = st();
   const sheets = res.sheets.filter((r) => !r.loi && r.viTri.length && !res.sub[r.sheet]);
   if (!sheets.length) return api.toast('File không có sheet đúng form phụ lục.', 'err');
-  const preview = (i, thang) => K.khopThucHien(S, sheets[i], thang, { apply: false });
-  const body = (i, thang) => { const p = preview(i, thang); return `<p><b class="n">${fmt(p.khop.length, 0)}</b> vị trí khớp (trạm + phường + tuyến) sẽ đánh dấu <b>Đã thực hiện · ${esc(thangTen(thang))}</b>.</p>
+  // Kênh: TT chỉ khớp vị trí KL Trung tâm, TS chỉ khớp phụ lục trình Sở (doc 05 H2)
+  const sk = (i, kenh) => ({ ...sheets[i], kenh });
+  const preview = (i, thang, kenh) => K.khopThucHien(S, sk(i, kenh), thang, { apply: false });
+  const body = (i, thang, kenh) => { const p = preview(i, thang, kenh); return `<p><b class="n">${fmt(p.khop.length, 0)}</b> vị trí khớp (trạm + phường + tuyến) sẽ đánh dấu <b>Đã thực hiện · ${esc(thangTen(thang))}</b>.</p>
     ${p.khop.filter((x) => x.kl !== x.klKH).length ? `<p class="muted">${fmt(p.khop.filter((x) => x.kl !== x.klKH).length, 0)} vị trí có KL thực hiện khác KL kế hoạch — chi tiết HM được tính theo tỉ lệ.</p>` : ''}
     ${p.khongKhop.length ? `<details open><summary class="kl-warn">${fmt(p.khongKhop.length, 0)} dòng không khớp vị trí nào — sẽ không ghi</summary><div class="kl-ngoai">${p.khongKhop.slice(0, 80).map((v) => `${esc(v.nhom)} · ${esc(v.tram)} · ${esc(v.tuyen)}`).join('<br>')}</div></details>` : ''}`; };
   openModal('Xem trước — nhập đã thực hiện', `
-    <div class="kl-impf"><label class="fld"><span>Sheet</span><select data-sh>${sheets.map((r, i) => `<option value="${i}">${esc(K.LOAI_TEN[r.loai])} › ${esc(r.sheet)} (${fmt(r.viTri.length, 0)} dòng)</option>`).join('')}</select></label>
-    <label class="fld"><span>Tháng nghiệm thu</span><input type="month" data-th value="${thangNay()}"></label></div>
-    <div data-pv>${body(0, thangNay())}</div>
+    <div class="kl-impf"><label class="fld"><span>Sheet</span><select data-sh>${sheets.map((r, i) => `<option value="${i}">${esc(KS.tenDich(r.loai))} › ${esc(r.sheet)} (${fmt(r.viTri.length, 0)} dòng)</option>`).join('')}</select></label>
+    <label class="fld"><span>Tháng nghiệm thu</span><input type="month" data-th value="${thangNay()}"></label>
+    <label class="fld"><span>Khớp với</span><select data-kn><option value="TS">Phụ lục trình Sở</option><option value="TT" ${sheets[0].kenh === 'TT' ? 'selected' : ''}>KL Trung tâm</option></select></label></div>
+    <div data-pv>${body(0, thangNay(), sheets[0].kenh === 'TT' ? 'TT' : 'TS')}</div>
     <div class="sheet-f"><button class="btn ghost" data-x>Huỷ</button><button class="btn amber" data-ap>Ghi đã thực hiện</button></div>`, {
     onMount: (el, close) => {
-      const cur = () => [+el.querySelector('[data-sh]').value, el.querySelector('[data-th]').value];
-      el.querySelector('[data-sh]').onchange = el.querySelector('[data-th]').onchange = () => (el.querySelector('[data-pv]').innerHTML = body(...cur()));
+      const cur = () => [+el.querySelector('[data-sh]').value, el.querySelector('[data-th]').value, el.querySelector('[data-kn]').value];
+      el.querySelector('[data-sh]').onchange = () => { el.querySelector('[data-kn]').value = sheets[+el.querySelector('[data-sh]').value].kenh === 'TT' ? 'TT' : 'TS'; el.querySelector('[data-pv]').innerHTML = body(...cur()); };
+      el.querySelector('[data-th]').onchange = el.querySelector('[data-kn]').onchange = () => (el.querySelector('[data-pv]').innerHTML = body(...cur()));
       el.querySelector('[data-ap]').onclick = async () => {
-        let r; await api.mutate(() => (r = K.khopThucHien(S, sheets[cur()[0]], cur()[1])));
+        let r; await api.mutate(() => { const [i, th, kn] = cur(); r = K.khopThucHien(S, sk(i, kn), th); });
         close(); api.toast(`Đã ghi ${fmt(r.khop.length, 0)} vị trí đã thực hiện${r.khongKhop.length ? ` · ${r.khongKhop.length} dòng không khớp` : ''}.`, 'ok'); rerender();
       };
     },
@@ -871,7 +876,7 @@ async function ganMau() {
       const L0 = plLoai.get(v.plId);
       const L = L0 === 'KHAC' ? 'KS:' + v.nguon?.type : L0;
       if (!(S.mau[L] || []).some((m) => m.ma)) { thieu.add(tenMau(L)); continue; }
-      v.chiTiet = v.kl === null || v.kl === undefined ? [] : K.apMau(S.mau[L], v.kl); v.chiTietSua = false; n++;
+      v.chiTiet = v.kl === null || v.kl === undefined ? [] : K.apMau(S.mau[L], v.kl, v.kl2); v.chiTietSua = false; n++;
     }
   });
   api.toast(`Đã gắn mẫu cho ${n} vị trí${thieu.size ? ` · chưa có mẫu: ${[...thieu].join(', ')}` : ''}.`, thieu.size ? 'err' : 'ok');
@@ -1002,12 +1007,14 @@ async function xuatExcel() {
     onMount: (el, close) => { el.querySelector('[data-ap]').onclick = async (e) => {
       const ids = [...el.querySelectorAll('[data-xp]:checked')].map((x) => x.dataset.xp);
       if (!ids.length) return api.toast('Chọn ít nhất 1 phụ lục.', 'err');
-      const chan = KS.kiemXuat(S, ids);
+      const goiX = el.querySelector('[data-xg]').value;
+      const chan = KS.kiemXuat(S, ids, { goi: goiX || undefined });
       if (chan.length) return api.toast('Chưa xuất được: ' + chan.map((c) => `${c.sheet}${c.n ? ' — ' + c.n + ' vị trí' : ''}: ${c.lyDo}`).join('; '), 'err');
+      const cb = KS.canhBaoXuat(S, ids);
+      if (cb.length && !(await confirmBox(cb.map((c) => c.lyDo + (c.vt.length ? ': ' + c.vt.slice(0, 5).join('; ') + (c.vt.length > 5 ? '…' : '') : '')).join(' ') + ' Vẫn xuất?', 'Vẫn xuất'))) return;
       e.target.disabled = true; e.target.textContent = 'Đang lập file…';
       try {
         const [EJ, { buildWorkbook }] = await Promise.all([loadExcelJS(), import('./export.js')]);
-        const goiX = el.querySelector('[data-xg]').value;
         const wb = buildWorkbook(EJ, S, { templates: PL_TEMPLATES, phuLucIds: ids, goi: goiX || undefined });
         const buf = await wb.xlsx.writeBuffer();
         const a = document.createElement('a');

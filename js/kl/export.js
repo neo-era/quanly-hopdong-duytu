@@ -12,6 +12,7 @@ const rowOf = (a) => +a.replace(/^[A-Z]+/, '');
 const colOf = (a) => a.replace(/\d+$/, '');
 
 const RESERVED = new Set(['tonghop', 'tonghop_tt', 'chitiet_hm', 'doichieu_hm']);
+const DG_CELL = { PLI: 'I6', PLII: 'Q8', PLIII: 'L5' };
 const LA_MA = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII', 'XIII', 'XIV', 'XV'];
 const tenPLX = (pl) => (kenhPL(pl) === 'TT' ? 'KL TT · ' : '') + tenDich(pl.loai);
 const TIEN_TO = 'DUY TRÌ HỆ THỐNG CHIẾU SÁNG ĐÔ THỊ - ';
@@ -42,6 +43,8 @@ export function buildWorkbook(ExcelJS, st, opts) {
   let nTT = 0;
   const sorted = [...pls].sort((a, b) => (kenhPL(a) === 'TT') - (kenhPL(b) === 'TT') || thuTu(a.loai) - thuTu(b.loai));
   for (const pl of sorted) {
+    // Phụ lục không còn vị trí (thường gặp khi xuất theo gói) → bỏ, không sinh sheet rỗng mang số cũ
+    if (!st2.viTri.some((v) => v.plId === pl.id)) continue;
     const tt = kenhPL(pl) === 'TT';
     const so = tt ? 'TT-' + String(++nTT).padStart(2, '0') : LA_MA[loaiTS.indexOf(pl.loai)] || '';
     const o = writePL(wb, st2, pl, T?.[pl.loai] || tplCua(pl.loai, KS_MAP), { so, tt });
@@ -59,7 +62,7 @@ export function buildWorkbook(ExcelJS, st, opts) {
 
 function writePL(wb, st, pl, tpl, { so = '', tt = false } = {}) {
   if (!tpl) return null;
-  const ten = tt ? 'Bieu ' + so + ' ' + tenDich(pl.loai).split(' · ').pop() : pl.sheet || SHEET_TEN[pl.loai] || tenDich(pl.loai);
+  const ten = (tt ? 'Bieu ' + so + ' ' + tenDich(pl.loai).split(' · ').pop() : pl.sheet || SHEET_TEN[pl.loai] || tenDich(pl.loai)).replace(/\//g, '-');
   const ws = wb.addWorksheet(uniqueName(wb, ten), {
     pageSetup: { orientation: 'landscape', paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 0, horizontalCentered: true,
       margins: { left: 0.4, right: 0.3, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 } },
@@ -69,7 +72,10 @@ function writePL(wb, st, pl, tpl, { so = '', tt = false } = {}) {
   const cols = tpl.cols;
   const KL = tpl.kl, TIEN = tpl.tien;
   const lastCore = colLetter(Math.max(...Object.values(cols).map(colIdx)));
-  const donGia = pl.donGia ?? tpl.donGia ?? null;
+  // KL Trung tâm: không ghi tiền theo đơn giá phụ lục Sở (tiền tính ở TongHop_TT theo đơn giá HĐ) — chỉ một con số
+  const donGia = tt ? null : pl.donGia ?? tpl.donGia ?? null;
+  const dgCell = tpl.donGiaCell || DG_CELL[pl.loai] || null;
+  const dgRef = dgCell ? '$' + dgCell.replace(/(\d+)/, '$$$1') : null;
 
   // Độ rộng cột + chiều cao dòng phần đầu (theo file gốc)
   for (const [c, w] of Object.entries({ ...H.widths, ...(pl.header?.widths || {}) })) ws.getColumn(c).width = w;
@@ -95,9 +101,16 @@ function writePL(wb, st, pl, tpl, { so = '', tt = false } = {}) {
     c.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
   }
   for (const m of H.merges) { try { ws.mergeCells(m); } catch { /* đã gộp */ } }
-  // Đơn giá ở ô tham chiếu như file gốc (PL II: Q8, PL III: L5…) — để ngoài vùng in
-  if (donGia && pl.loai === 'PLII') ws.getCell('Q8').value = donGia;
-  if (donGia && pl.loai === 'PLIII') ws.getCell('L5').value = donGia;
+  // Đơn giá ở ô tham chiếu như file gốc (K4, I6, Q8, M6, J6, L5…) — ngoài vùng in; tiền từng dòng = ROUNDDOWN(KL × ô đơn giá)
+  if (donGia && dgCell) { ws.getCell(dgCell).value = donGia; ws.getCell(dgCell).numFmt = '#,##0'; }
+  const tienDong = (v, rr) => {
+    if (tt) return null;
+    if (v.tienTay !== undefined && v.tienTay !== null) return v.tienTay;
+    if (!donGia || !isFinite(+v.kl) || v.kl === null) return null;
+    const kq = Math.floor((+v.kl) * donGia);
+    return dgRef ? { formula: `ROUNDDOWN(${KL}${rr}*${dgRef},0)`, result: kq } : { formula: `ROUNDDOWN(${KL}${rr}*${donGia},0)`, result: kq };
+  };
+  let tienTong = 0;
 
   // Viền phần đầu cột
   for (let r = H.hdrRow; r < H.totRow; r++) for (let c = 0; c <= colIdx(lastCore); c++) ws.getCell(colLetter(c) + r).border = BOX;
@@ -136,8 +149,12 @@ function writePL(wb, st, pl, tpl, { so = '', tt = false } = {}) {
     // Dòng phường mang Gói + CSKV khi mọi vị trí cùng gói / đơn vị (như mẫu 21-09)
     const g1 = items[0].goi, d1 = items[0].donVi;
     if (g1 && items.every((v) => v.goi === g1)) ws.getCell(tpl.extra.goi + gr).value = 'Gói ' + g1.replace(/^G/, '');
-    if (d1 && items.every((v) => v.donVi === d1)) ws.getCell(tpl.extra.donVi + gr).value = d1;
-    if (donGia) ws.getCell(TIEN + gr).value = { formula: `${KL}${gr}*${donGia}`, result: sum * donGia };
+    if (d1 && items.every((v) => v.donVi === d1)) ws.getCell(tpl.extra.donVi + gr).value = items[0].donViGoc || d1;
+    const q1 = items[0].maQuan;
+    if (q1 && tpl.extra.maQuan && items.every((v) => v.maQuan === q1)) ws.getCell(tpl.extra.maQuan + gr).value = q1;
+    const tienNhom = tt ? 0 : items.reduce((a, v) => { const x = tienDong(v, 0); return a + (x === null ? 0 : typeof x === 'object' ? x.result : +x || 0); }, 0);
+    if (!tt && TIEN && items.some((v) => tienDong(v, 0) !== null)) { ws.getCell(TIEN + gr).value = { formula: `SUBTOTAL(9,${TIEN}${first}:${TIEN}${last})`, result: tienNhom }; ws.getCell(TIEN + gr).numFmt = '#,##0'; }
+    tienTong += tienNhom;
     styleRow(gr, true);
     groupRows.push(gr);
     items.forEach((v, i) => {
@@ -148,8 +165,10 @@ function writePL(wb, st, pl, tpl, { so = '', tt = false } = {}) {
         ws.getCell(L + rr).value = val;
       }
       if (v.goi) ws.getCell(tpl.extra.goi + rr).value = 'Gói ' + v.goi.replace(/^G/, '');
-      if (v.donVi) ws.getCell(tpl.extra.donVi + rr).value = v.donVi;
-      if (pl.loai === 'PLI' && (v.donGia || donGia)) ws.getCell(TIEN + rr).value = v.donGia || donGia;
+      if (v.donVi) ws.getCell(tpl.extra.donVi + rr).value = v.donViGoc || v.donVi;
+      if (v.maQuan && tpl.extra.maQuan) ws.getCell(tpl.extra.maQuan + rr).value = v.maQuan;
+      const td = TIEN ? tienDong(v, rr) : null;
+      if (td !== null) { ws.getCell(TIEN + rr).value = td; ws.getCell(TIEN + rr).numFmt = '#,##0'; }
       styleRow(rr, false);
       ws.getCell(KL + rr).alignment = { horizontal: 'center', vertical: 'middle' };
     });
@@ -165,7 +184,7 @@ function writePL(wb, st, pl, tpl, { so = '', tt = false } = {}) {
     ws.getCell(L + T).value = { formula: `SUBTOTAL(9,${L}${T + 1}:${L}${end})`, result: vts.reduce((a, v) => a + (+v[f] || 0), 0) };
     ws.getCell(L + T).alignment = { horizontal: 'center', vertical: 'middle' };
   }
-  if (donGia && groupRows.length) ws.getCell(TIEN + T).value = { formula: groupRows.map((g) => TIEN + g).join('+'), result: tong * donGia };
+  if (!tt && TIEN && groupRows.some((g) => ws.getCell(TIEN + g).value)) { ws.getCell(TIEN + T).value = { formula: `SUBTOTAL(9,${TIEN}${T + 1}:${TIEN}${end})`, result: tienTong }; ws.getCell(TIEN + T).numFmt = '#,##0'; }
   styleRow(T, true);
   ws.getCell(KL + T).alignment = { horizontal: 'center', vertical: 'middle' };
   ws.pageSetup.printArea = `A1:${lastCore}${end}`;
@@ -205,6 +224,18 @@ function writeTongHop(wb, outs) {
     const daTach = [...combos.values()].reduce((a, b) => a + b, 0);
     if (Math.abs(tongV - daTach) > 1e-9 || !combos.size) combos.set('|', tongV - daTach);
     const dg = pl.donGia ?? tpl.donGia ?? null;
+    // Tiền lấy thẳng từ cột Thành tiền của sheet phụ lục (dòng nhập tay vẫn đúng), không nhân lại KL × giá
+    const TI = tpl.tien;
+    const tienTot = TI ? s.getCell(TI + (first - 1)).value : null;
+    const coTien = !!(tienTot && (typeof tienTot === 'object' ? tienTot.formula : true));
+    const tienV = (c) => { const x = c?.value; return typeof x === 'number' ? x : x && typeof x === 'object' ? +x.result || 0 : 0; };
+    const tienCombo = new Map();
+    if (coTien) s.eachRow((row, rn) => {
+      if (rn < first || rn > end) return;
+      const goi = row.getCell(tpl.extra.goi).value, dv = row.getCell(tpl.extra.donVi).value;
+      if (typeof row.getCell(KL).value !== 'number' || (!goi && !dv)) return;
+      const k = `${dv || ''}|${goi || ''}`; tienCombo.set(k, (tienCombo.get(k) || 0) + tienV(row.getCell(TI)));
+    });
     const hr = r++;
     heads.push(hr);
     const kids = [];
@@ -223,13 +254,23 @@ function writeTongHop(wb, outs) {
         ws.getCell('C' + rr).value = { formula: `SUMIFS(${rng(KL)},${crit.join(',')})`, result: sum };
       }
       ws.getCell('D' + rr).value = tpl.dvt;
-      if (dg) { ws.getCell('E' + rr).value = dg; ws.getCell('F' + rr).value = { formula: `C${rr}*E${rr}`, result: sum * dg }; }
+      if (coTien) {
+        if (pl.donGia) ws.getCell('E' + rr).value = pl.donGia;
+        if (k === '|') {
+          const khac = kids.slice(0, -1);
+          const tot = tienV({ value: tienTot }) - khac.reduce((a, x) => a + (ws.getCell('F' + x).value?.result || 0), 0);
+          ws.getCell('F' + rr).value = { formula: `${sn}!${TI}${first - 1}${khac.length ? `-SUM(F${khac[0]}:F${khac[khac.length - 1]})` : ''}`, result: tot };
+        } else {
+          const crit = [`${rng(tpl.extra.goi)},${goi ? tieuChi(goi) : '"="'}`, `${rng(tpl.extra.donVi)},${dv ? tieuChi(dv) : '"="'}`];
+          ws.getCell('F' + rr).value = { formula: `SUMIFS(${rng(TI)},${crit.join(',')})`, result: tienCombo.get(k) || 0 };
+        }
+      } else if (dg) { ws.getCell('E' + rr).value = dg; ws.getCell('F' + rr).value = { formula: `C${rr}*E${rr}`, result: sum * dg }; }
     }
     const tot = [...combos.values()].reduce((a, b) => a + b, 0);
     ws.getCell('A' + hr).value = `${tenPLX(pl)}${pl.dot ? ' — ' + pl.dot : ''}`;
     ws.getCell('C' + hr).value = kids.length ? { formula: `SUM(C${kids[0]}:C${kids[kids.length - 1]})`, result: tot } : 0;
     ws.getCell('D' + hr).value = tpl.dvt;
-    if (dg) ws.getCell('F' + hr).value = kids.length ? { formula: `SUM(F${kids[0]}:F${kids[kids.length - 1]})`, result: tot * dg } : 0;
+    if (coTien || dg) ws.getCell('F' + hr).value = kids.length ? { formula: `SUM(F${kids[0]}:F${kids[kids.length - 1]})`, result: kids.reduce((a, x) => a + (ws.getCell('F' + x).value?.result || 0), 0) } : 0;
     for (const rr of [hr, ...kids]) for (let c = 1; c <= 6; c++) {
       const cell = ws.getCell(rr, c); cell.border = BOX; cell.font = { name: FONT, size: 12, bold: rr === hr };
       if (c >= 3 && c !== 4) cell.numFmt = '#,##0';
@@ -305,9 +346,11 @@ function writeTongHopTT(wb, st) {
   const plMap = new Map(st.phuLuc.map((p) => [p.id, p]));
   const acc = new Map();
   for (const v of st.viTri) {
-    if (!tt.has(v.plId) || !v.goi) continue;
+    if (!tt.has(v.plId)) continue;
+    // Chưa rõ gói / nhiều gói → gom 1 dòng "(chưa rõ gói)" để tổng vẫn đủ (kiểm tra trước khi xuất đã cảnh báo)
+    const goi = v.goi && v.goi !== 'nhieu' ? v.goi : '?';
     const nam = plMap.get(v.plId)?.namKH;
-    for (const c of v.chiTiet || []) { const k = v.goi + '|' + nam + '|' + c.ma; acc.set(k, (acc.get(k) || 0) + (+c.kl || 0)); }
+    for (const c of v.chiTiet || []) { const k = goi + '|' + nam + '|' + c.ma; acc.set(k, (acc.get(k) || 0) + (+c.kl || 0)); }
   }
   if (!acc.size) return;
   const lastCT = Math.max(wb.getWorksheet('ChiTiet_HM').rowCount, 2);
@@ -331,8 +374,9 @@ function writeTongHopTT(wb, st) {
     const g = it?.goi?.[goi];
     const dg = g?.dgNam?.[nam] ?? g?.dg ?? it?.dgChuaVat ?? null;
     const kl = Math.round(acc.get(k) * 1e6) / 1e6;
-    ws.getRow(r).values = ['Gói ' + goi.replace(/^G/, ''), +nam, ma, it?.ten || '(không có trong danh mục HĐ)', it?.dvt || '',
-      { formula: `SUMIFS(${rng('F')},${rng('E')},C${r},${rng('G')},${tieuChi(goi)},${rng('H')},B${r},${rng('L')},"TT")`, result: kl },
+    const ro = goi === '?';
+    ws.getRow(r).values = [ro ? '(chưa rõ gói)' : 'Gói ' + goi.replace(/^G/, ''), +nam, ma, it?.ten || '(không có trong danh mục HĐ)', it?.dvt || '',
+      ro ? kl : { formula: `SUMIFS(${rng('F')},${rng('E')},C${r},${rng('G')},${tieuChi(goi)},${rng('H')},B${r},${rng('L')},"TT")`, result: kl },
       dg, dg ? { formula: `F${r}*G${r}`, result: kl * dg } : null];
     tong += dg ? kl * dg : 0;
     for (let c = 1; c <= 8; c++) { const cell = ws.getCell(r, c); cell.border = BOX; cell.font = { name: FONT, size: 12 }; if (c >= 6) cell.numFmt = '#,##0.##'; }

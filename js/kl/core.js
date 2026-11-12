@@ -33,8 +33,9 @@ let seq = 0;
 const uid = (p) => `${p}-${Date.now().toString(36)}${(seq++).toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
 /** Chi tiết HM từ mẫu: KL vị trí × hệ số. */
-export function apMau(mau, kl) {
-  return gopMa((mau || []).filter((m) => m.ma).map((m) => ({ ma: m.ma, kl: round((+kl || 0) * (+m.heSo || 0)) })));
+/** Mẫu chi tiết HM: mỗi dòng nhân theo KL chính, hoặc theo KL phụ `kl2` khi m.theo === 'kl2' (Hạ ngầm: md cáp). */
+export function apMau(mau, kl, kl2) {
+  return gopMa((mau || []).filter((m) => m.ma).map((m) => ({ ma: m.ma, kl: round((+(m.theo === 'kl2' ? kl2 : kl) || 0) * (+m.heSo || 0)) })));
 }
 /** Gộp các dòng trùng mã HM trong 1 vị trí (cộng KL) — mỗi mã chỉ 1 dòng để KH/TH luôn nhất quán. */
 export function gopMa(list) {
@@ -64,7 +65,7 @@ export function importPL(st, r, opts = {}) {
   const pl = {
     id: old ? old.id : uid('pl'), loai: r.loai, sheet: r.sheet, file: opts.file || '', tieuDe: r.tieuDe, congVan: r.congVan,
     dot: opts.dot || '', nhomVon: opts.nhomVon || '', namKH: +opts.namKH || new Date().getFullYear(),
-    donGia: r.viTri.find((v) => v.donGia)?.donGia ?? null, header: r.header || null,
+    donGia: 'donGia' in r ? r.donGia : (r.viTri.find((v) => v.donGia)?.donGia ?? null), header: r.header || null,
     nhom: r.groups.map((g) => g.ten), ngayNhap: new Date().toISOString(),
   };
   if (kenh === 'TT') pl.kenh = 'TT';
@@ -76,7 +77,7 @@ export function importPL(st, r, opts = {}) {
     delete n.row; delete n.hidden;
     // Cột "không có trong KH" nhập từ file: giữ đúng X của file, app không tính lại (doc 05 H6)
     n.ngoaiKH = 'file';
-    n.chiTiet = prev?.chiTietSua ? prev.chiTiet : apMau(mau, v.kl);
+    n.chiTiet = prev?.chiTietSua ? prev.chiTiet : apMau(mau, v.kl, v.kl2);
     n.chiTietSua = !!prev?.chiTietSua;
     n.trangThai = prev?.trangThai || 'chua';
     n.thangNT = prev?.thangNT || '';
@@ -92,7 +93,7 @@ export function apMauChoLoai(st, loai, ghiDe = false) {
   let n = 0;
   for (const v of st.viTri) {
     if (!ids.has(v.plId) || (v.chiTietSua && !ghiDe)) continue;
-    v.chiTiet = apMau(st.mau[loai], v.kl); v.chiTietSua = false; n++;
+    v.chiTiet = apMau(st.mau[loai], v.kl, v.kl2); v.chiTietSua = false; n++;
   }
   return n;
 }

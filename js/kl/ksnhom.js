@@ -75,6 +75,12 @@ export const NHOM_THEO_LOAI = {
     { nhom: 'Tủ điều khiển', co: [/tu dieu khien chieu sang/, /kieng tu|mong tu dieu khien/], tru: [/vo tu|^cung cap /] },
     { nhom: 'Khoá · phụ kiện tủ', co: [/o khoa|tui vai chong nuoc|bang ten tu|tam phip/] },
   ],
+  // Thay sửa tủ để kết nối điều khiển tự động (PL Thay sửa tủ — loại KS mới 11/11/2026)
+  thay_sua_tu: [
+    { nhom: 'Tủ điều khiển', co: [/tu dieu khien chieu sang/, /kieng tu|mong tu dieu khien/], tru: [/vo tu|^cung cap /] },
+    { nhom: 'Thiết bị điều khiển · kết nối', co: [/bo dieu khien|thiet bi dieu khien|ket noi|modem|plc|rtu|contactor|khoi dong tu|mccb|cb |aptomat/] },
+    { nhom: 'Khoá · phụ kiện tủ', co: [/o khoa|tui vai chong nuoc|bang ten tu|tam phip/] },
+  ],
   decal_so_tru: [
     { nhom: 'Decal · bảng tên', co: [/decal|bang ten tu/] },
   ],

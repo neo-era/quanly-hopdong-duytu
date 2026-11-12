@@ -20,7 +20,7 @@ function kho() {
   };
   st.mau.PLIII = [{ ma: 'HM210', heSo: 1 }, { ma: 'HM214', heSo: 1 }];
   st.mau.PLII = [{ ma: 'HM101', heSo: 1 }];
-  st.mau['KS:tc_ngam'] = [{ ma: 'HM300', heSo: 1 }];
+  st.mau.CAPNGAM = [{ ma: 'HM300', heSo: 1 }];
   st.phuLuc.push({ id: 'pl1', loai: 'PLIII', sheet: 'PL III', file: 'a.xlsx', namKH: 2026, dot: 'Đợt 1', nhom: ['Bàn Cờ'] });
   st.viTri.push({ id: 'v1', plId: 'pl1', stt: 1, tram: 'TĐK LVS-01', phuong: 'Phường Nhiêu Lộc', tuyen: 'Lê Văn Sỹ', nhom: 'Nhiêu Lộc', kl: 3, goi: 'G1', donVi: '',
     chiTiet: [{ ma: 'HM210', kl: 3 }, { ma: 'HM214', kl: 3 }], trangThai: 'chua' });
@@ -30,11 +30,11 @@ function kho() {
   st.viTri.push({ id: 'v4', plId: 'pl1', stt: 4, tram: 'TĐK Z', phuong: 'Xuân Hòa', tuyen: 'CMT8', nhom: 'Xuân Hòa', kl: 1, goi: 'G2', donVi: '', chiTiet: [], trangThai: 'chua' });
   return st;
 }
-const TRU = (o = {}) => ({ _type: 'thay_tru', STT: 'TT-261105-AB12', 'Vị trí': 'Trước số 120', 'Tuyến đường': 'Nguyễn Thị Minh Khai', Quận: 'Quận 3', Phường: 'Bàn Cờ',
+const TRU = (o = {}) => ({ _type: 'thay_tru', 'Trình Sở': 'Trình Sở', STT: 'TT-261105-AB12', 'Vị trí': 'Trước số 120', 'Tuyến đường': 'Nguyễn Thị Minh Khai', Quận: 'Quận 3', Phường: 'Bàn Cờ',
   'Tủ điều khiển': 'TĐK NTMK-02', 'Số lượng': 6, 'Quy cách trụ (loại trụ: chiều cao VD: STK 9m; be tông 8,4m; trang trí;...)': 'STK 9m', 'Năm lắp đặt': 2009,
-  'Ghi chú (kèm thay cần đèn,...)': '', link: 'https://maps.google.com/?q=1,2', 'Deleted At': '', ...o });
-const DEN = (o = {}) => ({ _type: 'thay_den', STT: 'TD-261101-0001', 'Tuyến đường': 'Võ Văn Tần', Quận: 'Quận 3', Phường: 'Xuân Hòa', 'Tủ điều khiển': 'TĐK VVT-01',
-  'Đầu tuyến': 'CMT8', 'Cuối tuyến': 'Bà Huyện Thanh Quan', 'Số đèn hiện hữu': 14, 'Công suất đèn hiện hữu': '150W', 'Năm lắp đặt': 2012, 'Ghi chú': '', 'Deleted At': '', ...o });
+  'Ghi chú (kèm thay cần đèn,...)': '', link: 'https://maps.google.com/?q=1,2', 'Deleted At': '', 'Trình Sở': 'Trình Sở', ...o });
+const DEN = (o = {}) => ({ _type: 'thay_den', 'Trình Sở': 'Trình Sở', STT: 'TD-261101-0001', 'Tuyến đường': 'Võ Văn Tần', Quận: 'Quận 3', Phường: 'Xuân Hòa', 'Tủ điều khiển': 'TĐK VVT-01',
+  'Đầu tuyến': 'CMT8', 'Cuối tuyến': 'Bà Huyện Thanh Quan', 'Số đèn hiện hữu': 14, 'Công suất đèn hiện hữu': '150W', 'Năm lắp đặt': 2012, 'Ghi chú': '', 'Deleted At': '', 'Trình Sở': 'Trình Sở', ...o });
 
 // ---------- 1. Đọc số ----------
 eq(S.docSo(6), 6, 'số');
@@ -54,24 +54,29 @@ eq(S.docSo('1.5'), 1.5, '"1.5" thập phân');
   eq([t.dich, t.vt.kl, t.vt.tram, t.vt.phuong, t.vt.tuyen, t.vt.lyTrinhDau, t.vt.namLD], ['PLIII', 6, 'TĐK NTMK-02', 'Bàn Cờ', 'Nguyễn Thị Minh Khai', 'Trước số 120', 2009], 'thay_tru → PL III, KL = Số lượng, Vị trí → lý trình đầu');
   ok(/STK 9m/.test(t.vt.ghiChu), 'quy cách trụ → ghi chú');
   eq(t.vt.nguon.ks, 'thay_tru#TT-261105-AB12', 'khoá nguồn');
-  eq(S.anhXa(TRU({ 'Quy cách trụ (loại trụ: chiều cao VD: STK 9m; be tông 8,4m; trang trí;...)': 'Trang trí 4m' })).goiYPLIV, true, 'trụ trang trí → gợi ý PL IV (không tự chuyển)');
+  { const tt = S.anhXa(TRU({ 'Quy cách trụ (loại trụ: chiều cao VD: STK 9m; be tông 8,4m; trang trí;...)': 'Trang trí 4m' }));
+    eq([tt.goiYPLIV, /trang trí/i.test(tt.vt.ghiChu)], [false, true], 'trụ trang trí ở chung PL Thay trụ, ghi chú "Trụ trang trí" (doc 05, bỏ gợi ý PL IV)'); }
   eq(S.anhXa(TRU({ 'Quy cách trụ (loại trụ: chiều cao VD: STK 9m; be tông 8,4m; trang trí;...)': 'Trang trí 4m' })).dich, 'PLIII', 'mặc định vẫn PL III');
   const d = S.anhXa(DEN());
-  eq([d.dich, d.vt.hienHuu, d.vt.kl, d.vt.namLD, d.vt.lyTrinhDau, d.vt.lyTrinhCuoi], ['PLII', 14, null, 2012, 'CMT8', 'Bà Huyện Thanh Quan'], 'thay_den → PL II: số đèn hiện hữu → cột G, KL (J) để trống');
+  eq([d.dich, d.vt.hienHuu, d.vt.kl, d.vt.namLD, d.vt.lyTrinhDau, d.vt.lyTrinhCuoi], ['PLII', 14, 14, 2012, 'CMT8', 'Bà Huyện Thanh Quan'], 'thay_den → PL II: số đèn hiện hữu → cột G, LED (J) mặc định = G (doc 05)');
   eq([d.vt.congSuat, d.vt.tinhHinh, d.vt.ltbQD], [undefined, undefined, undefined], 'PL II: cột I, K, L để trống');
   ok(/150W/.test(d.vt.ghiChu), 'công suất HPS hiện hữu → ghi chú');
-  eq(S.anhXa({ _type: 'vo_tu', STT: 'VT-1', 'Tuyến đường': 'A', Phường: 'Bàn Cờ', 'Tủ điều khiển': 'T', 'Số lượng': 1 }).dich, 'KHAC', 'vo_tu → Khác (không phải PL I)');
-  eq(S.anhXa({ _type: 'nang_mong', STT: 'NM-1', 'Tuyến đường': 'A', Phường: 'B', 'Tủ điều khiển': 'T', 'Độ cao nâng': 200, 'Số lượng': 2 }).vt.kl, 2, 'nâng móng: KL = Số lượng, không lấy Độ cao nâng');
-  eq(S.anhXa({ _type: 'tc_ngam', STT: 'TCG-1', 'Tuyến đường': 'A', Phường: 'B', 'Tủ điều khiển': 'T', 'Số lượng': '39m' }).vt.kl, 39, 'cáp ngầm "39m" → 39');
-  eq(Object.keys(S.KS_MAP).length, 17, 'đủ 17 loại khảo sát đều có đích (anh chốt 09/11)');
-  const br = S.anhXa({ _type: 'thao_go_bang_ron', STT: 'BR-1', 'Tuyến đường': 'A', Phường: 'Bàn Cờ', 'Vị trí': 'số 10–20', 'Loại quảng cáo': 'Băng rôn', 'Số lượng': 12 });
-  eq([br.dich, br.vt.kl, br.vt.lyTrinhDau, br.dvt], ['KHAC', 12, 'số 10–20', 'tấm'], 'băng rôn: không cần cột TĐK, KL = Số lượng (tấm)');
-  const sc = S.anhXa({ _type: 'bao_cao_su_co', STT: 'SC-1', 'Tuyến đường': 'A', Phường: 'B', 'Tủ điều khiển': 'T', 'Mã tủ': 'TM118.03', 'Hiện trạng sự cố': 'Gãy trụ' });
-  eq([sc.dich, sc.vt.kl], ['KHAC', null], 'sự cố: KL để trống (không có cột số lượng)');
+  { const vt = S.anhXa({ _type: 'vo_tu', STT: 'VT-1', 'Tuyến đường': 'A', Phường: 'Bàn Cờ', 'Tủ điều khiển': 'T', 'Số lượng': 1 });
+    eq([vt.dich, vt.kenh], ['KS:vo_tu', 'TT'], 'vo_tu → khuôn chung, luôn KL Trung tâm (kể cả bản cũ trống cột Trình Sở)'); }
+  eq(S.anhXa({ _type: 'nang_mong', 'Trình Sở': 'Trình Sở', STT: 'NM-1', 'Tuyến đường': 'A', Phường: 'B', 'Tủ điều khiển': 'T', 'Độ cao nâng': 200, 'Số lượng': 2 }).vt.kl, 2, 'nâng móng: KL = Số lượng, không lấy Độ cao nâng');
+  eq(S.anhXa({ _type: 'tc_ngam', 'Trình Sở': 'Trình Sở', STT: 'TCG-1', 'Tuyến đường': 'A', Phường: 'B', 'Tủ điều khiển': 'T', 'Số lượng': '39m' }).vt.kl, 39, 'cáp ngầm "39m" → 39');
+  eq(Object.keys(S.KS_MAP).length, 18, 'đủ 18 loại khảo sát (thêm Thay sửa tủ 11/11) đều có đích');
+  const br = S.anhXa({ _type: 'thao_go_bang_ron', 'Trình Sở': 'Trình Sở', STT: 'BR-1', 'Tuyến đường': 'A', Phường: 'Bàn Cờ', 'Vị trí': 'số 10–20', 'Loại quảng cáo': 'Băng rôn', 'Số lượng': 12 });
+  eq([br.dich, br.vt.kl, br.vt.lyTrinhDau, br.dvt], ['KS:thao_go_bang_ron', 12, 'số 10–20', 'tấm'], 'băng rôn: không cần cột TĐK, KL = Số lượng (tấm)');
+  const sc = S.anhXa({ _type: 'bao_cao_su_co', 'Trình Sở': 'Trình Sở', STT: 'SC-1', 'Tuyến đường': 'A', Phường: 'B', 'Tủ điều khiển': 'T', 'Mã tủ': 'TM118.03', 'Hiện trạng sự cố': 'Gãy trụ' });
+  eq([sc.dich, sc.vt.kl], ['KS:bao_cao_su_co', null], 'sự cố: KL để trống (không có cột số lượng)');
   ok(/TM118\.03/.test(sc.vt.ghiChu) && /Gãy trụ/.test(sc.vt.ghiChu), 'sự cố: mã tủ + hiện trạng → ghi chú');
-  eq(S.anhXa({ _type: 'tang_cuong_den', STT: 'TCD-1', 'Tuyến đường': 'A', Phường: 'B', 'Tủ điều khiển': 'T', 'Số đèn dự kiến': 3 }).vt.kl, 3, 'tăng cường đèn: lấy Số đèn dự kiến');
-  eq(S.anhXa({ _type: 'ngam_hoa', STT: 'NH-1', 'Tuyến đường': 'A', Phường: 'B', 'Tủ điều khiển': 'T', 'Số đèn dự kiến': 5 }).vt.kl, 5, 'ngầm hóa: lấy Số đèn dự kiến');
-  let loi = null; try { S.anhXa({ _type: 'thay_tru', STT: 'x', 'Tuyến đường': 'A' }); } catch (e) { loi = e.message; }
+  eq(S.anhXa({ _type: 'tang_cuong_den', 'Trình Sở': 'Trình Sở', STT: 'TCD-1', 'Tuyến đường': 'A', Phường: 'B', 'Tủ điều khiển': 'T', 'Số đèn dự kiến': 3 }).vt.kl, 3, 'tăng cường đèn: lấy Số đèn dự kiến');
+  { const nh = S.anhXa({ _type: 'ngam_hoa', 'Trình Sở': 'Trình Sở', STT: 'NH-1', 'Tuyến đường': 'A', Phường: 'B', 'Tủ điều khiển': 'T', 'Số đèn dự kiến': 5, 'Số trụ': 7, 'Chiều dài cáp ngầm (md)': '120,5' });
+    eq([nh.dich, nh.vt.kl, nh.vt.kl2], ['HANGAM', 7, 120.5], 'ngầm hóa → Hạ ngầm: KL = Số trụ, kl2 = cáp (md)');
+    const nhCu = S.anhXa({ _type: 'ngam_hoa', 'Trình Sở': 'Trình Sở', STT: 'NH-2', 'Tuyến đường': 'A', Phường: 'B', 'Tủ điều khiển': 'T', 'Số đèn dự kiến': 5 });
+    eq([nhCu.vt.kl, 'kl2' in nhCu.vt], [null, false], 'ngầm hóa bản cũ (thiếu 2 cột mới) → Thiếu KL, không lấy Số đèn dự kiến, không ném lỗi'); }
+  let loi = null; try { S.anhXa({ _type: 'thay_tru', 'Trình Sở': 'Trình Sở', STT: 'x', 'Tuyến đường': 'A' }); } catch (e) { loi = e.message; }
   ok(/Thiếu cột/.test(loi || ''), 'thiếu cột → báo lỗi rõ');
   eq(S.anhXa(TRU({ 'Số lượng': '' })).vt.kl, null, 'KL trống giữ trống');
 }
@@ -108,7 +113,7 @@ eq(S.docSo('1.5'), 1.5, '"1.5" thập phân');
   eq(by.DUP.trangThai, 'sttTrung', 'STT trùng trong khảo sát → báo, không gộp');
   eq(by.DUP.chon, false, 'STT trùng không chọn');
   eq(by['TD-261101-0001'].dich, 'PLII', 'thay đèn → PL II');
-  eq(xt.dem, { moi: 4, thayDoi: 0, trungPL: 1, thieuKL: 2, xoa: 0, sttTrung: 2 }, 'đếm theo nhóm (thiếu KL gồm PL II cột J)');
+  eq(xt.dem, { moi: 4, thayDoi: 0, trungPL: 1, thieuKL: 1, xoa: 0, sttTrung: 2, chuaPL: 0, TS: 4, TT: 0 }, 'đếm theo nhóm + kênh');
 
   const kq = S.apDung(st, xt.items, { namKH: 2026, chonGoi: { 'thay_tru#TT-261105-0003': 'G2' } });
   eq(kq.them, 4, 'thêm 4 vị trí (moi, đã chọn)');
@@ -203,7 +208,7 @@ eq(S.docSo('1.5'), 1.5, '"1.5" thập phân');
   eq(p.tomTat.every((r) => r.length === 10), true, 'đủ 10 cột');
   ok(p.phuongGoi.some((r) => r[0] === 'Bàn Cờ' && r[1] === 'G1'), 'phường → gói');
   eq(p.loaiHM.filter((r) => r[0] === 'thay_tru').map((r) => r[1]), ['HM210', 'HM214'], 'loại KS → mã HM theo mẫu');
-  eq(p.loaiHM.filter((r) => r[0] === 'tc_ngam').map((r) => r[1]), ['HM300'], 'loại Khác → mẫu riêng');
+  eq(p.loaiHM.filter((r) => r[0] === 'tc_ngam').map((r) => r[1]), ['HM300'], 'thay cáp ngầm → mẫu PL Thay cáp nguồn ngầm');
   eq(p.lienKet, [['thay_tru', 'TT-261105-AB12', 'G1', 'HM210', 'Nháp', 'Đề xuất (nháp)', '']], 'liên kết: nháp');
   const v = st.viTri.find((x) => x.nguon?.ks);
   S.xacNhanThuocSo(st, [v.id], true); S.chuyenNhap(st, [v.id], { dot: 'Đợt 3' });
@@ -214,11 +219,13 @@ eq(S.docSo('1.5'), 1.5, '"1.5" thập phân');
 // ---------- 7. Mẫu nhóm Khác ----------
 {
   const st = kho();
-  S.apDung(st, S.xemTruoc(st, [{ _type: 'tc_ngam', STT: 'TCG-1', 'Tuyến đường': 'A', Phường: 'Bàn Cờ', 'Tủ điều khiển': 'T', 'Số lượng': 40 }], { namKH: 2026 }).items, { namKH: 2026 });
-  const v = st.viTri.find((x) => x.nguon?.ks === 'tc_ngam#TCG-1');
-  eq(v.chiTiet, [{ ma: 'HM300', kl: 40 }], 'Khác: chi tiết theo mẫu riêng của loại KS');
-  st.mau['KS:tc_ngam'] = [{ ma: 'HM300', heSo: 1 }, { ma: 'HM301', heSo: 0.5 }];
-  eq(S.apMauKS(st, 'tc_ngam'), 1, 'áp lại mẫu Khác');
+  st.mau['KS:tc_noi'] = [{ ma: 'HM300', heSo: 1 }];
+  S.apDung(st, S.xemTruoc(st, [{ _type: 'tc_noi', STT: 'TCN-1', 'Tuyến đường': 'A', Phường: 'Bàn Cờ', 'Tủ điều khiển': 'T', 'Số lượng': 40, 'Trình Sở': 'Không trình Sở' }], { namKH: 2026 }).items, { namKH: 2026 });
+  const v = st.viTri.find((x) => x.nguon?.ks === 'tc_noi#TCN-1');
+  eq(v.chiTiet, [{ ma: 'HM300', kl: 40 }], 'Khuôn chung: chi tiết theo mẫu riêng của loại KS');
+  eq(K.kenhPL(st.phuLuc.find((p) => p.id === v.plId)), 'TT', 'Không trình Sở → phụ lục nháp kênh TT');
+  st.mau['KS:tc_noi'] = [{ ma: 'HM300', heSo: 1 }, { ma: 'HM301', heSo: 0.5 }];
+  eq(S.apMauKS(st, 'tc_noi'), 1, 'áp lại mẫu khuôn chung');
   eq(v.chiTiet, [{ ma: 'HM300', kl: 40 }, { ma: 'HM301', kl: 20 }], 'chi tiết mới');
   eq(K.LOAI_TEN.KHAC, 'Khác · ngoài phụ lục', 'tên nhóm Khác');
 }
@@ -250,7 +257,7 @@ eq(S.docSo('1.5'), 1.5, '"1.5" thập phân');
   eq(MA.goiYMa('vo_tu', {}, 1, {}), null, 'mã không có trong danh mục HĐ → không gán');
   // tích hợp: kho chưa khai mẫu Khác → gán theo mã danh mục; có mẫu → theo mẫu
   const st = kho(); Object.assign(st.catalog, CAT); st.mau.PLIII = [];
-  const xt = S.xemTruoc(st, [TRU(), { _type: 'tc_noi', STT: 'TCN-1', 'Tuyến đường': 'A', Phường: 'Bàn Cờ', 'Tủ điều khiển': 'T', 'Số lượng': 120, 'Loại cáp hiện hữu': '5x10' }], { namKH: 2026 });
+  const xt = S.xemTruoc(st, [TRU(), { _type: 'tc_noi', 'Trình Sở': 'Trình Sở', STT: 'TCN-1', 'Tuyến đường': 'A', Phường: 'Bàn Cờ', 'Tủ điều khiển': 'T', 'Số lượng': 120, 'Loại cáp hiện hữu': '5x10' }], { namKH: 2026 });
   eq(xt.items.map((i) => i.goiY?.ma), ['HM286', 'HM347'], 'xem trước hiện mã gợi ý');
   S.apDung(st, xt.items, { namKH: 2026 });
   eq(st.viTri.find((v) => v.nguon?.ks === 'thay_tru#TT-261105-AB12').chiTiet, [{ ma: 'HM286', kl: 6 }], 'trụ STK 9m × 6 → HM286 × 6');
@@ -299,7 +306,7 @@ eq(S.docSo('1.5'), 1.5, '"1.5" thập phân');
   eq(tat('choa_den'), ['HM091'], 'chóa: chỉ chóa');
   ok(tat('tc_ngam').includes('HM506') && tat('tc_ngam').includes('HM346') && !tat('tc_ngam').includes('HM449'), 'cáp ngầm: cáp + đào mương, không lẫn MCCB "từ xa bằng"');
   eq(tat('nang_mong').includes('HM257'), false, 'nâng móng: "không bao gồm móng trụ" không vào nhóm móng');
-  eq(N.LOAI_CO_NHOM.length, 17, 'đủ 17 loại khảo sát có nhóm');
+  eq(N.LOAI_CO_NHOM.length, 18, 'đủ 18 loại khảo sát có nhóm');
   eq(Object.keys(S.KS_MAP).every((t) => N.LOAI_CO_NHOM.includes(t)), true, 'mọi loại trong KS_MAP đều có nhóm');
 
   // ĐVT 8 dạng
@@ -310,8 +317,8 @@ eq(S.docSo('1.5'), 1.5, '"1.5" thập phân');
   eq(MA.goiYMa('tc_noi', {}, 80, CAT, 'G2'), null, 'mã không có trong gói → không gán');
 
   // anhXa đọc lựa chọn của người khảo sát (_hd); hash chỉ đổi khi có
-  const rowTD = (hd) => ({ _type: 'thay_den', STT: 'TD-1', 'Tuyến đường': 'Châu Văn Liêm', Phường: 'Chợ Lớn', 'Tủ điều khiển': 'CVL-3', 'Số đèn hiện hữu': 4, 'Công suất đèn hiện hữu': '150W', ...(hd ? { _hd: hd } : {}) });
-  const a0 = S.anhXa(rowTD());
+  const rowTD = (hd) => ({ _type: 'thay_den', 'Trình Sở': 'Trình Sở', STT: 'TD-1', 'Tuyến đường': 'Châu Văn Liêm', Phường: 'Chợ Lớn', 'Tủ điều khiển': 'CVL-3', 'Số đèn hiện hữu': 4, 'Công suất đèn hiện hữu': '150W', ...(hd ? { _hd: hd } : {}) });
+  const a0 = S.anhXa({ ...rowTD(), 'Trình Sở': '' });   // bản cũ chưa có cột Trình Sở
   const a1 = S.anhXa(rowTD({ nam: 2026, goi: 'G1', goiTay: true, ds: [{ ma: 'HM207', heSo: 1 }, { ma: 'HM187', heSo: 1 }] }));
   eq(a1.vt.ksChon, { nam: 2026, goi: 'G1', goiTay: true, ds: [{ ma: 'HM207', heSo: 1 }, { ma: 'HM187', heSo: 1 }] }, 'đọc lựa chọn KS');
   eq(a0.vt.ksChon, undefined, 'không chọn → không có ksChon');
@@ -323,7 +330,7 @@ eq(S.docSo('1.5'), 1.5, '"1.5" thập phân');
   // Ưu tiên: mã KS chọn > mẫu > ksma; gói chọn tay khi phường chưa có
   const st = kho(); Object.assign(st.catalog, CAT); st.catalog.HM187.goi.G1 = { kl: { 2026: 50 } }; st.catalog.HM207.goi.G1 = { kl: { 2026: 50 } };
   st.mau.PLII = [{ ma: 'HM101', heSo: 1 }];
-  const row = { ...rowTD({ nam: 2026, goi: 'G1', goiTay: true, ds: [{ ma: 'HM207', heSo: 1 }, { ma: 'HM187', heSo: 1 }] }), 'Số đèn hiện hữu': 4 };
+  const row = { ...rowTD({ nam: 2026, goi: 'G1', goiTay: true, ds: [{ ma: 'HM207', heSo: 1 }, { ma: 'HM187', heSo: 1 }] }), 'Số đèn hiện hữu': 4, 'Trình Sở': 'Trình Sở' };
   const xt = S.xemTruoc(st, [row], { namKH: 2026 });
   const it = xt.items[0];
   eq([it.goi, it.goiKS], ['G1', true], 'phường chưa có trong HĐ → dùng gói người KS chọn, có cờ');
@@ -334,7 +341,7 @@ eq(S.docSo('1.5'), 1.5, '"1.5" thập phân');
   eq(v.chiTiet, [{ ma: 'HM207', kl: 4 }, { ma: 'HM187', kl: 4 }], 'chi tiết = mã KS chọn (thắng mẫu PL II)');
   eq(v.goiKS, true, 'vị trí ghi cờ gói do KS chọn');
   // Lệch gói: phường đã có gói thật khác gói KS chọn
-  const row2 = { ...rowTD({ nam: 2026, goi: 'G2', goiTay: true, ds: [{ ma: 'HM186', heSo: 1 }] }), STT: 'TD-2', Phường: 'Bàn Cờ' };
+  const row2 = { ...rowTD({ nam: 2026, goi: 'G2', goiTay: true, ds: [{ ma: 'HM186', heSo: 1 }] }), STT: 'TD-2', Phường: 'Bàn Cờ', 'Trình Sở': 'Trình Sở' };
   const it2 = S.xemTruoc(st, [row2], { namKH: 2026 }).items[0];
   eq([it2.goi, it2.lechGoi], ['G1', true], 'phường có gói thật G1 ≠ KS chọn G2 → giữ G1, nhãn lệch gói');
   const st5 = kho(); Object.assign(st5.catalog, CAT);
@@ -350,7 +357,7 @@ eq(S.docSo('1.5'), 1.5, '"1.5" thập phân');
   eq(st5.viTri.find((x) => x.id === v5.id).lechGoi, true, 'KS đổi sang gói khác → lệch gói lại');
   // Sửa tay thắng; KS đổi mã sau sửa tay → nhãn, không ghi đè
   v.chiTiet = [{ ma: 'HM186', kl: 4 }]; v.chiTietSua = true;
-  const row3 = { ...rowTD({ nam: 2026, goi: 'G1', goiTay: true, ds: [{ ma: 'HM186', heSo: 1 }, { ma: 'HM207', heSo: 1 }] }), 'Số đèn hiện hữu': 4 };
+  const row3 = { ...rowTD({ nam: 2026, goi: 'G1', goiTay: true, ds: [{ ma: 'HM186', heSo: 1 }, { ma: 'HM207', heSo: 1 }] }), 'Số đèn hiện hữu': 4, 'Trình Sở': 'Trình Sở' };
   const xt3 = S.xemTruoc(st, [row3], { namKH: 2026 });
   eq(xt3.items[0].trangThai, 'thayDoi', 'KS đổi mã → thay đổi');
   S.apDung(st, xt3.items, { namKH: 2026 });
@@ -369,6 +376,153 @@ eq(S.docSo('1.5'), 1.5, '"1.5" thập phân');
   ok(lh.some((r) => r[0] === 'thay_den' && r[1] === 'HM186' && r[2] === 'Thay bộ đèn'), 'loaiHM có nhóm');
   eq(lh.filter((r) => /_cg$/.test(r[1])).length, 0, 'không đẩy mã _cg');
   eq(lh.filter((r) => r[0] === 'thay_tru' && r[2] === 'Theo mẫu đã khai').map((r) => r[1]), ['HM210', 'HM214'], 'mã theo mẫu vẫn có, nhóm riêng');
+}
+
+// ---------- 12. Trình Sở / KL Trung tâm (doc 05 H1, H2, H6, H8) ----------
+{
+  eq([S.docKenh('Trình Sở'), S.docKenh('trinh so'), S.docKenh('TRÌNH SỞ'.normalize('NFD')), S.docKenh(' Không trình Sở '), S.docKenh('1'), S.docKenh('')],
+    ['TS', 'TS', 'TS', 'TT', null, null], 'H1: đọc cột Trình Sở bỏ dấu/hoa thường; giá trị lạ / trống = chưa phân loại');
+  const st = kho();
+  // H1: 3 nhóm; chưa phân loại không tự vào đâu
+  const rows = [TRU({ STT: 'A1' }), TRU({ STT: 'A2', 'Tuyến đường': 'Hai Bà Trưng', 'Trình Sở': 'Không trình Sở' }), TRU({ STT: 'A3', 'Tuyến đường': 'Pasteur', 'Trình Sở': '' })];
+  const xt = S.xemTruoc(st, rows, { namKH: 2026 });
+  const by = Object.fromEntries(xt.items.map((i) => [i.stt, i]));
+  eq([by.A1.kenh, by.A2.kenh, by.A3.kenh], ['TS', 'TT', null], 'H1: kênh từng bản');
+  eq([by.A1.chon, by.A2.chon, by.A3.chon], [true, true, false], 'chưa phân loại: mặc định không chọn');
+  eq([xt.dem.TS, xt.dem.TT, xt.dem.chuaPL], [1, 1, 1], 'đếm theo kênh');
+  by.A3.chon = true;
+  const kq = S.apDung(st, xt.items, { namKH: 2026 });
+  eq([kq.them, kq.chuaPL], [2, 1], 'chưa phân loại chọn mà chưa đặt kênh → bỏ qua, báo số');
+  const plTS = st.phuLuc.find((p) => p.nhap && p.loai === 'PLIII' && K.kenhPL(p) === 'TS'), plTT = st.phuLuc.find((p) => p.nhap && p.loai === 'PLIII' && K.kenhPL(p) === 'TT');
+  ok(plTS && plTT && plTS.id !== plTT.id, 'H2: 2 phụ lục nháp tách theo kênh');
+  eq(plTS.kenh, undefined, 'phụ lục TS không ghi trường kenh (dữ liệu cũ đọc là TS)');
+  // Văn phòng đặt kênh cho bản chưa phân loại
+  const xt3 = S.xemTruoc(st, [rows[2]], { namKH: 2026 });
+  xt3.items[0].chon = true;
+  S.apDung(st, xt3.items, { namKH: 2026, chonKenh: { [xt3.items[0].key]: 'TT' } });
+  const v3 = st.viTri.find((v) => v.nguon?.ks === 'thay_tru#A3');
+  eq([v3.plId, v3.kenhTay], [plTT.id, 'TT'], 'Đặt TT → vào nháp TT, lưu kenhTay');
+  // Đổi TS → TT khi đang nháp → chuyển phụ lục, đánh lại stt
+  const v1 = st.viTri.find((v) => v.nguon?.ks === 'thay_tru#A1');
+  S.apDung(st, S.xemTruoc(st, [TRU({ STT: 'A1', 'Trình Sở': 'Không trình Sở' })], { namKH: 2026 }).items, { namKH: 2026 });
+  eq(v1.plId, plTT.id, 'H2: KS đổi TS→TT, vị trí nháp chưa thực hiện → sang nháp TT');
+  eq(st.viTri.filter((v) => v.plId === plTT.id).map((v) => v.stt), [1, 2, 3], 'stt nháp TT đánh lại liền');
+  eq(st.viTri.filter((v) => v.plId === plTS.id).length, 0, 'nháp TS không còn vị trí');
+  // kenhTay thắng: KS đổi A3 sang TS → chỉ gắn nhãn
+  S.apDung(st, S.xemTruoc(st, [TRU({ STT: 'A3', 'Tuyến đường': 'Pasteur', 'Trình Sở': 'Trình Sở' })], { namKH: 2026 }).items, { namKH: 2026 });
+  eq([v3.plId, v3.nguon.doiTrinhSo], [plTT.id, { tu: 'TT', sang: 'TS' }], 'văn phòng đã đặt kênh → KS đổi chỉ gắn nhãn');
+  ok(/KS đổi/.test(S.lyDoChan(st, v3)), 'nhãn đổi kênh chặn chuyển đợt cho tới khi xem lại');
+  S.datKenh(st, [v3.id], 'TT');
+  eq(v3.nguon.doiTrinhSo, undefined, 'đặt lại kênh tay → bỏ nhãn');
+  // Đã vào đợt thật: đổi kênh chỉ gắn nhãn
+  const v2 = st.viTri.find((v) => v.nguon?.ks === 'thay_tru#A2');
+  S.chuyenNhap(st, [v2.id], { dot: 'Đợt 9' });
+  const plDot = st.phuLuc.find((p) => p.id === v2.plId);
+  eq([plDot.nhap, K.kenhPL(plDot), /KL TT/.test(plDot.sheet)], [false, 'TT', true], 'chuyển đợt giữ kênh TT, không cần xác nhận thuộc Sở');
+  S.apDung(st, S.xemTruoc(st, [TRU({ STT: 'A2', 'Tuyến đường': 'Hai Bà Trưng', 'Trình Sở': 'Trình Sở' })], { namKH: 2026 }).items.map((i) => ({ ...i, chon: true })), { namKH: 2026 });
+  eq([v2.plId, v2.nguon.doiTrinhSo], [plDot.id, { tu: 'TT', sang: 'TS' }], 'đã vào đợt → chỉ gắn nhãn');
+  // Đã thực hiện: gắn nhãn, giữ KL
+  v1.trangThai = 'da';
+  S.apDung(st, S.xemTruoc(st, [TRU({ STT: 'A1', 'Trình Sở': 'Trình Sở', 'Số lượng': 9 })], { namKH: 2026 }).items.map((i) => ({ ...i, chon: true })), { namKH: 2026 });
+  eq([v1.plId, v1.kl, v1.nguon.doiTrinhSo, v1.nguon.doiSauTH], [plTT.id, 6, { tu: 'TT', sang: 'TS' }, true], 'đã thực hiện → giữ KL, gắn nhãn');
+  // Vỏ tủ: luôn TT, không đặt TS được
+  const xv = S.xemTruoc(st, [{ _type: 'vo_tu', STT: 'VT-9', 'Tuyến đường': 'A', Phường: 'Bàn Cờ', 'Tủ điều khiển': 'T', 'Số lượng': 1 }], { namKH: 2026 });
+  eq([xv.items[0].kenh, xv.items[0].chon], ['TT', true], 'vỏ tủ bản cũ trống → TT, không rơi vào chưa phân loại');
+  S.apDung(st, xv.items, { namKH: 2026 });
+  const vv = st.viTri.find((v) => v.nguon?.ks === 'vo_tu#VT-9');
+  eq(S.datKenh(st, [vv.id], 'TS').boQua.length, 1, 'vỏ tủ không đặt TS được');
+  // HPS + Trình Sở ở tăng cường KC xa → chưa phân loại kèm lý do
+  const hp = S.anhXa({ _type: 'tc_den_kc_xa', 'Trình Sở': 'Trình Sở', STT: 'TDX-1', 'Tuyến đường': 'A', Phường: 'B', 'Tủ điều khiển': 'T', 'Chủng loại đèn': 'HPS 150W', 'Số lượng': 2 });
+  eq([hp.dich, hp.kenh, /LED/.test(hp.kenhLoi)], ['TANGCUONG', null, true], 'HPS trình Sở → không vào PL tăng cường LED');
+  eq(S.anhXa({ _type: 'tc_den_kc_xa', 'Trình Sở': 'Trình Sở', STT: 'TDX-2', 'Tuyến đường': 'A', Phường: 'B', 'Tủ điều khiển': 'T', 'Chủng loại đèn': 'LED 120W', 'Số lượng': 2 }).kenh, 'TS', 'LED trình Sở → TS');
+}
+// TS và TT trùng vị trí: không báo trùng, không khớp chéo; khTS + khTT = kh
+{
+  const st = kho();
+  st.phuLuc.push({ id: 'plTT', loai: 'PLIII', kenh: 'TT', sheet: 'Biểu TT', file: 'b.xlsx', namKH: 2026, dot: 'Đợt 1', nhom: ['Nhiêu Lộc'] });
+  st.viTri.push({ id: 'w1', plId: 'plTT', stt: 1, tram: 'TĐK LVS-01', phuong: 'Phường Nhiêu Lộc', tuyen: 'Lê Văn Sỹ', nhom: 'Nhiêu Lộc', kl: 4, goi: 'G1', donVi: '',
+    chiTiet: [{ ma: 'HM210', kl: 4 }], trangThai: 'chua' });
+  const r = (kenh) => TRU({ STT: 'B-' + kenh, 'Tuyến đường': 'Lê Văn Sỹ', Phường: 'Nhiêu Lộc', 'Tủ điều khiển': 'TĐK LVS-01', 'Trình Sở': kenh });
+  const xt = S.xemTruoc(st, [r('Trình Sở'), r('Không trình Sở')], { namKH: 2026 });
+  eq(xt.items.map((i) => i.trangThai), ['trungPL', 'trungPL'], 'cùng kênh trùng vị trí → báo trùng (TS: v1, TT: w1)');
+  const st2 = kho();
+  const xt2 = S.xemTruoc(st2, [r('Không trình Sở')], { namKH: 2026 });
+  eq(xt2.items[0].trangThai, 'moi', 'TT trùng vị trí phụ lục TS → không báo trùng');
+  const kh = K.khopThucHien(st, { loai: 'PLIII', viTri: [{ tram: 'TĐK LVS-01', phuong: 'Phường Nhiêu Lộc', tuyen: 'Lê Văn Sỹ', kl: 3 }] }, '2026-10', { apply: false });
+  eq(kh.khop.map((k) => k.id), ['v1'], 'BBNT (TS) chỉ khớp phụ lục TS');
+  const khT = K.khopThucHien(st, { loai: 'PLIII', kenh: 'TT', viTri: [{ tram: 'TĐK LVS-01', phuong: 'Phường Nhiêu Lộc', tuyen: 'Lê Văn Sỹ', kl: 3 }] }, '2026-10', { apply: false });
+  eq(khT.khop.map((k) => k.id), ['w1'], 'kênh TT chỉ khớp phụ lục TT');
+  const d = K.doiChieu(st, 'G1', 2026).rows.find((x) => x.ma === 'HM210');
+  eq([d.kh, d.khTS, d.khTT, d.khTS + d.khTT === d.kh], [9, 5, 4, true], 'H8: khTS + khTT = tổng Đã vào KH');
+}
+// H6: cột "không có trong KH" tự đánh cho vị trí từ KS; file giữ nguyên; văn phòng bật/tắt
+{
+  const st = kho();
+  st.catalog.HM210.goi.G1.kl[2026] = 10;   // HĐ còn lại = 10 − 5 (v1, v2) = 5
+  const rows = [TRU({ STT: 'C1', 'Số lượng': 3 }), TRU({ STT: 'C2', 'Tuyến đường': 'Hai Bà Trưng', 'Số lượng': 3 })];
+  S.apDung(st, S.xemTruoc(st, rows, { namKH: 2026 }).items, { namKH: 2026 });
+  const pl = st.phuLuc.find((p) => p.nhap);
+  const ids = st.viTri.filter((v) => v.plId === pl.id).map((v) => v.id);
+  const m = K.ngoaiKHCua(st, pl);
+  eq(ids.map((id) => m.get(id)), ['', 'X'], 'cộng dồn 3 rồi 6 > còn lại 5 → dòng thứ 2 đánh X');
+  K.datNgoaiKH(st, ids[1], false);
+  eq(K.ngoaiKHCua(st, pl).get(ids[1]), '', 'văn phòng tắt X');
+  K.datNgoaiKH(st, ids[1], null);
+  eq(K.ngoaiKHCua(st, pl).get(ids[1]), 'X', 'về tự động');
+  st.viTri.find((v) => v.id === 'v1').klNgoaiKH = 'X'; st.viTri.find((v) => v.id === 'v1').ngoaiKH = 'file';
+  eq(K.ngoaiKHCua(st, st.phuLuc.find((p) => p.id === 'pl1')).get('v1'), 'X', 'vị trí từ file giữ đúng X của file');
+}
+
+// ---------- 13. Sau duyệt vòng 1: trùng khi văn phòng đặt kênh, CSKV, kiểm xuất, mẫu theo md ----------
+{
+  const st = kho();
+  // v1 (phụ lục thật PLIII, TS) ở TĐK LVS-01 / Nhiêu Lộc / Lê Văn Sỹ
+  const row = TRU({ STT: 'D1', 'Tuyến đường': 'Lê Văn Sỹ', Phường: 'Nhiêu Lộc', 'Tủ điều khiển': 'TĐK LVS-01', 'Trình Sở': '' });
+  const xt = S.xemTruoc(st, [row], { namKH: 2026 });
+  xt.items[0].chon = true;
+  const kq = S.apDung(st, xt.items, { namKH: 2026, chonKenh: { [xt.items[0].key]: 'TS' } });
+  eq([kq.them, kq.trungPL], [0, 1], 'văn phòng đặt TS cho bản chưa phân loại trùng phụ lục TS → không thêm, báo trùng');
+  const kq2 = S.apDung(st, S.xemTruoc(st, [row], { namKH: 2026 }).items.map((i) => ({ ...i, chon: true })), { namKH: 2026, chonKenh: { 'thay_tru#D1': 'TT' } });
+  eq(kq2.them, 1, 'đặt TT → khác kênh, vẫn thêm');
+  const xt3 = S.xemTruoc(st, [TRU({ STT: 'D2', 'Tuyến đường': 'Lê Văn Sỹ', Phường: 'Nhiêu Lộc', 'Tủ điều khiển': 'TĐK LVS-01', 'Trình Sở': 'Không trình Sở' })], { namKH: 2026 });
+  eq(xt3.items[0].trungKhacKenh, true, 'xem trước: nhãn trùng vị trí khác kênh');
+  const xt4 = S.xemTruoc(kho(), [TRU({ STT: 'G1', 'Tuyến đường': 'Pasteur', Phường: 'Bàn Cờ', 'Tủ điều khiển': 'TĐK P', 'Trình Sở': 'Trình Sở' }), TRU({ STT: 'G2', 'Tuyến đường': 'Pasteur', Phường: 'Bàn Cờ', 'Tủ điều khiển': 'TĐK P', 'Trình Sở': 'Không trình Sở' })], { namKH: 2026 });
+  eq(xt4.items.map((i) => i.trungKhacKenh), [true, true], 'cùng lượt: 2 bản cùng vị trí khác kênh đều gắn nhãn');
+}
+{
+  const st = kho();
+  st.viTri.find((v) => v.id === 'v1').donVi = 'CS Trung tâm';
+  S.apDung(st, S.xemTruoc(st, [TRU({ STT: 'E1', 'Tuyến đường': 'Trần Quốc Thảo', Phường: 'Nhiêu Lộc', 'Tủ điều khiển': 'TĐK TQT' })], { namKH: 2026 }).items, { namKH: 2026 });
+  eq(st.viTri.find((v) => v.nguon?.ks === 'thay_tru#E1').donVi, 'CS Trung tâm', 'CSKV vị trí KS lấy theo phường trong phụ lục thật');
+}
+{
+  const st = kho();
+  st.mau.HANGAM = [{ ma: 'HM210', heSo: 1 }, { ma: 'HM300', heSo: 1, theo: 'kl2' }];
+  S.apDung(st, S.xemTruoc(st, [{ _type: 'ngam_hoa', 'Trình Sở': 'Trình Sở', STT: 'NH-9', 'Tuyến đường': 'A', Phường: 'Bàn Cờ', 'Tủ điều khiển': 'T', 'Số trụ': 4, 'Chiều dài cáp ngầm (md)': 150 }], { namKH: 2026 }).items, { namKH: 2026 });
+  eq(st.viTri.find((v) => v.nguon?.ks === 'ngam_hoa#NH-9').chiTiet, [{ ma: 'HM210', kl: 4 }, { ma: 'HM300', kl: 150 }], 'mẫu Hạ ngầm: mã tính theo trụ và theo md cáp');
+}
+{
+  const st = kho();
+  st.phuLuc.push({ id: 'pl9', loai: 'PLIII', sheet: 'PL III đợt 2', file: 'c.xlsx', namKH: 2026, dot: 'Đợt 2', nhom: [] });
+  st.viTri.push({ id: 'z1', plId: 'pl9', stt: 1, tram: 'X', phuong: 'Bàn Cờ', tuyen: 'Y', nhom: 'Bàn Cờ', kl: 1, goi: 'G1', chiTiet: [{ ma: 'HM210', kl: 1 }], trangThai: 'chua' });
+  ok(S.kiemXuat(st, ['pl1', 'pl9']).some((c) => /cùng loại/.test(c.lyDo)), 'chặn xuất 2 phụ lục trình Sở cùng loại (trùng số La Mã)');
+  eq(S.kiemXuat(st, ['pl1', 'pl9'], { goi: 'G2' }).filter((c) => /cùng loại/.test(c.lyDo)).length, 0, 'xuất theo gói: phụ lục không có vị trí gói đó không tính');
+  st.phuLuc.push({ id: 'plT', loai: 'PLIII', kenh: 'TT', sheet: 'TT', file: '', namKH: 2026, dot: 'Đợt 1', nhom: [] });
+  st.viTri.push({ id: 'z2', plId: 'plT', stt: 1, tram: 'X', phuong: 'Bàn Cờ', tuyen: 'Y', nhom: 'Bàn Cờ', kl: 1, goi: 'G1', chiTiet: [], trangThai: 'chua', nguon: { ks: 'thay_tru#Z', type: 'thay_tru', thuocSo: false } });
+  ok(S.kiemXuat(st, ['plT']).some((c) => /Chưa gắn mã HM/.test(c.lyDo)), 'chặn xuất vị trí KS kênh TT chưa gắn mã HM');
+  { const z3 = { ...st.viTri.find((v) => v.id === 'z2'), id: 'z3', plId: 'pl9' }; st.viTri.push(z3);
+    ok(!S.kiemXuat(st, ['pl9']).some((c) => /mã HM/.test(c.lyDo)) && S.canhBaoXuat(st, ['pl9']).some((c) => /chưa gắn mã HM/.test(c.lyDo)), 'trình Sở chưa có mã HM: chỉ cảnh báo');
+    st.viTri.pop(); }
+  ok(S.canhBaoXuat(st, ['pl9', 'plT'])[0]?.vt.length === 2, 'cảnh báo vị trí có ở cả TS và TT');
+}
+{
+  const st = kho();
+  S.apDung(st, S.xemTruoc(st, [TRU({ STT: 'F1' })], { namKH: 2026 }).items, { namKH: 2026 });
+  const v = st.viTri.find((x) => x.nguon?.ks === 'thay_tru#F1'); v.trangThai = 'da';
+  S.apDung(st, S.xemTruoc(st, [TRU({ STT: 'F1', 'Trình Sở': 'Không trình Sở' })], { namKH: 2026 }).items.map((i) => ({ ...i, chon: true })), { namKH: 2026 });
+  ok(v.nguon.doiTrinhSo, 'đã thực hiện + KS đổi TT → nhãn');
+  S.apDung(st, S.xemTruoc(st, [TRU({ STT: 'F1', 'Số lượng': 7 })], { namKH: 2026 }).items.map((i) => ({ ...i, chon: true })), { namKH: 2026 });
+  eq(v.nguon.doiTrinhSo, undefined, 'KS đổi lại TS (khớp kênh) → bỏ nhãn');
 }
 
 console.log(`\nks.test: ${pass} đạt, ${fail} lỗi`);

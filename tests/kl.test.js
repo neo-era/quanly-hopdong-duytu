@@ -10,6 +10,7 @@ import { fileURLToPath } from 'url';
 import * as P from '../js/kl/parse.js';
 import * as K from '../js/kl/core.js';
 import { buildWorkbook } from '../js/kl/export.js';
+import { tplCua } from '../js/kl/templates2.js';
 import { PL_TEMPLATES } from '../js/kl/templates.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -64,7 +65,7 @@ function fakePL() {
   eq(r.groups.map(g => [g.ten, g.klFile, g.klDoc]), [['XÃ A', 2, 2], ['XÃ B', 1, 1]], 'giả lập: cộng theo phường khớp file');
   ok(r.checks.khop, 'giả lập: tổng đọc = TỔNG CỘNG');
   eq([r.viTri[0].goi, r.viTri[0].donVi, r.viTri[2].goi, r.viTri[2].donVi], ['G2', 'CS Tây', 'G3', 'CS Bắc'], 'giả lập: nhận gói/đơn vị ở cột phụ');
-  eq(r.viTri[0].donGia, 67033279, 'giả lập: nhận đơn giá ở cột phụ');
+  eq([r.donGia, r.viTri[0].tienTay], [67033279, undefined], 'giả lập: đơn giá phụ lục suy từ tiền dòng (KL × giá đều nhau), không có tiền nhập tay');
 }
 
 // ---------- 4. Mẫu HM, đối chiếu, đánh dấu thực hiện ----------
@@ -330,6 +331,67 @@ if (BG && fs.existsSync(BG) && fs.readdirSync(BG).some((f) => /Tha_ng_10_Go_i_3/
   const kt = K.kiemBBNT(st, t10, 'G3');
   eq([kt.thangTruoc, kt.noiTiep.length > 0], [8, true], 'G3 T10: kỳ trước ≠ lũy kế (T7 + NT T8 hai đơn vị) → thiếu T9');
 }
+// ---------- Trình Sở / KL Trung tâm: xuất biểu TT, số La Mã, TongHop_TT, theo gói (doc 05 H4–H7) ----------
+if (ExcelJS) {
+  const st = K.emptyState();
+  st.catalog = { HM900: { ten: 'Thay vỏ tủ', dvt: 'tủ', goi: { G1: { kl: { 2026: 10 }, dg: 1000000 }, G2: { kl: { 2026: 10 }, dg: 2000000 } } } };
+  st.phuLuc.push({ id: 'a', loai: 'PLIII', sheet: 'Thay tru', file: 'f', namKH: 2026, nhom: [] }, { id: 'b', loai: 'HANGAM', sheet: 'Ha ngam', file: 'f', namKH: 2026, nhom: [] },
+    { id: 'c', loai: 'KS:vo_tu', kenh: 'TT', sheet: 'KL TT', file: '', nguon: 'KS', namKH: 2026, nhom: [] });
+  st.viTri.push({ id: 'v1', plId: 'a', stt: 1, nhom: 'Bàn Cờ', tram: 'T1', phuong: 'Bàn Cờ', tuyen: 'A', kl: 2, hienHuu: 2, goi: 'G1', chiTiet: [] },
+    { id: 'v2', plId: 'b', stt: 1, nhom: 'Bàn Cờ', tram: 'T2', phuong: 'Bàn Cờ', tuyen: 'B', kl: 5, kl2: 120.5, goi: 'G1', chiTiet: [] },
+    { id: 'v3', plId: 'b', stt: 2, nhom: 'Xuân Hòa', tram: 'T3', phuong: 'Xuân Hòa', tuyen: 'C', kl: 3, kl2: 80, goi: 'G2', chiTiet: [] },
+    { id: 'v4', plId: 'c', stt: 1, nhom: 'Bàn Cờ', tram: 'T4', phuong: 'Bàn Cờ', tuyen: 'D', kl: 2, goi: 'G1', chiTiet: [{ ma: 'HM900', kl: 2 }], nguon: { ks: 'vo_tu#VT-1', type: 'vo_tu' } },
+    { id: 'v5', plId: 'c', stt: 2, nhom: 'Xuân Hòa', tram: 'T5', phuong: 'Xuân Hòa', tuyen: 'E', kl: 1, goi: 'G2', chiTiet: [{ ma: 'HM900', kl: 1 }], nguon: { ks: 'vo_tu#VT-2', type: 'vo_tu' } });
+  const wb = buildWorkbook(ExcelJS, st, { templates: PL_TEMPLATES, phuLucIds: ['a', 'b', 'c'] });
+  const wb2 = XLSX.read(Buffer.from(await wb.xlsx.writeBuffer()), { type: 'buffer', cellFormula: true });
+  const names = wb2.SheetNames;
+  ok(names.includes('TongHop_TT') && names.some((n) => /^Bieu TT-01/.test(n)), 'có Biểu TT-01 + TongHop_TT');
+  const sHN = wb2.Sheets['Ha ngam'], sTr = wb2.Sheets['Thay tru'];
+  eq([sHN.A1?.v, sTr.A1?.v], ['Phụ lục I', 'Phụ lục II'], 'số La Mã theo thứ tự mẫu: Hạ ngầm trước Thay trụ');
+  const tt = wb2.Sheets[names.find((n) => /^Bieu TT-01/.test(n))];
+  ok(/^Biểu TT-01/.test(tt.A1?.v) && /THẨM QUYỀN TRUNG TÂM/.test(XLSX.utils.sheet_to_csv(tt)), 'biểu TT: tiêu đề KL thẩm quyền Trung tâm');
+  // Hạ ngầm: dòng TỔNG có cột cáp (G) là SUBTOTAL
+  const T2 = PL_TEMPLATES.HANGAM ? null : null; void T2;
+  const csv = XLSX.utils.sheet_to_json(sHN, { header: 1, raw: true });
+  const tongRow = csv.findIndex((r) => r.some((x) => /TỔNG CỘNG/i.test(String(x))));
+  ok(tongRow > 0 && /SUBTOTAL/.test(sHN['G' + (tongRow + 1)]?.f || ''), 'Hạ ngầm: cột cáp (md) có SUBTOTAL ở dòng TỔNG');
+  const th = XLSX.utils.sheet_to_json(wb2.Sheets.TongHop_TT, { header: 1, raw: true }).filter((r) => r[2] === 'HM900');
+  eq(th.map((r) => [r[0], r[5], r[7]]), [['Gói 1', 2, 2000000], ['Gói 2', 1, 2000000]], 'TongHop_TT: gói × mã, KL × đơn giá gói');
+  // Biểu TT xuất ra đọc lại được: nhận kênh TT + đúng loại khuôn chung
+  const rTT = P.parsePLWorkbook(XLSX, wb2).find((r) => /^Bieu TT-01/.test(r.sheet));
+  eq([rTT?.loi, rTT?.kenh, rTT?.loai, rTT?.viTri.length], [undefined, 'TT', 'KS:vo_tu', 2], 'khứ hồi Biểu TT: kênh TT, loại vỏ tủ, 2 vị trí');
+  const wbG = buildWorkbook(ExcelJS, st, { templates: PL_TEMPLATES, phuLucIds: ['a', 'b', 'c'], goi: 'G2' });
+  eq(wbG.worksheets.map((w) => w.name).filter((n) => !/^(TongHop|ChiTiet|DoiChieu)/.test(n)), ['Ha ngam', 'Bieu TT-01 Vỏ tủ điều khiển'], 'xuất theo gói G2: bỏ phụ lục không có vị trí gói đó');
+  eq(wbG.getWorksheet('Ha ngam').getCell('A1').value, 'Phụ lục I', 'đánh số lại sau khi bỏ phụ lục rỗng');
+  const hnG = wbG.getWorksheet('Ha ngam');
+  let nT = 0; hnG.eachRow((r) => { if (r.values.some((x) => x === 'T2' || x === 'T3')) nT++; });
+  eq(nT, 1, 'xuất theo gói G2: chỉ vị trí G2');
+} else skip++;
+const F2109 = process.env.KL_2109;
+if (ExcelJS && F2109 && fs.existsSync(F2109)) {
+  // H9: nhập file 21-09 rồi xuất lại → đọc lại phải khớp từng sheet (tổng, theo gói, số vị trí, số X). Số kiểm không ghi trong repo.
+  const rs = P.parsePLWorkbook(XLSX, readWb(F2109)).filter((r) => !r.loi);
+  ok(rs.length >= 6, 'file 21-09: đọc được đủ 6 phụ lục mẫu');
+  for (const r of rs) eq(Math.round(r.checks.tongDoc * 1000), Math.round(r.tongFile * 1000), `21-09 ${r.sheet}: đọc khớp TỔNG CỘNG của file`);
+  const st = K.emptyState();
+  for (const r of rs) K.importPL(st, r, { file: '21-09', namKH: 2026 });
+  const wb = buildWorkbook(ExcelJS, st, { templates: PL_TEMPLATES, phuLucIds: st.phuLuc.map((p) => p.id) });
+  const wbBack = XLSX.read(Buffer.from(await wb.xlsx.writeBuffer()), { type: 'buffer', cellFormula: true });
+  const back = P.parsePLWorkbook(XLSX, wbBack).filter((r) => !r.loi);
+  const wbGoc = readWb(F2109);
+  // Tiền từng gói: cột Thành tiền của dòng vị trí (ROUNDDOWN theo ô đơn giá hoặc nhập tay) phải giữ nguyên
+  const tienGoi = (w, r) => { const T = tplCua(r.loai).tien; const ws = w.Sheets[r.sheet]; const g = {};
+    for (const v of r.viTri) { const c = ws[T + v.row]; const k = v.goi || '?'; g[k] = (g[k] || 0) + (typeof c?.v === 'number' ? c.v : 0); }
+    return g; };
+  const tom = (r) => { const g = {}; let x = 0; for (const v of r.viTri) { const k = v.goi || '?'; g[k] = g[k] || [0, 0, 0]; g[k][0] += +v.kl || 0; g[k][1] += +v.kl2 || 0; g[k][2] += +v.hienHuu || 0; if (v.klNgoaiKH) x++; }
+    for (const k in g) g[k] = g[k].map((n) => Math.round(n * 1000) / 1000); return { n: r.viTri.length, x, g }; };
+  for (const r of rs) {
+    const b = back.find((y) => y.sheet === r.sheet) || back.find((y) => y.loai === r.loai);
+    ok(b, `21-09 ${r.sheet}: xuất lại có sheet cùng loại`);
+    if (b) eq(tom(b), tom(r), `21-09 ${r.sheet}: xuất lại khớp số vị trí / X / tổng theo gói`);
+    if (b) eq(tienGoi(wbBack, b), tienGoi(wbGoc, r), `21-09 ${r.sheet}: xuất lại khớp Thành tiền theo gói`);
+  }
+} else { skip++; console.log('… bỏ qua test H9 file 21-09 (chưa đặt KL_2109)'); }
 const HMF = process.env.KL_HM;
 if (HMF && fs.existsSync(HMF)) {
   const wb = XLSX.read(fs.readFileSync(HMF), { type: 'buffer', sheets: ['Tong hop HM', 'G1_11C', 'G2_11C', 'G3_11C', 'G4_11C'] });

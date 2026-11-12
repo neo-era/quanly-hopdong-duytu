@@ -34,7 +34,7 @@ export const NHOM_THEO_LOAI = {
   ngam_hoa: [
     { nhom: 'Cáp ngầm', co: CAP_NGAM, tru: [/^noi cap/] },
     { nhom: 'Ống · hộp · nối cáp', co: [/\bong hdpe|\bong thep han|\bong nhua (chong chay|xoan)/, /hop noi cap|hop dau noi cap/, /^noi cap ngam/], tru: [/mat duong|muong cap/] },
-    { nhom: 'Đào · hoàn trả mặt bằng', co: DAO_HOAN_TRA, tru: [VAT_TU_PHU] },
+    { nhom: 'Đào · hoàn trả mặt bằng', co: DAO_HOAN_TRA, tru: [VAT_TU_PHU, /ten mien|duong truyen/] },
     { nhom: 'Thu hồi cáp nổi · đèn', co: [/^thao do cap (noi|dien len den)/, /^thao do day dan/, /^thao do bo den/] },
   ],
   hkn: [
@@ -48,7 +48,7 @@ export const NHOM_THEO_LOAI = {
   tc_ngam: [
     { nhom: 'Cáp ngầm', co: CAP_NGAM, tru: [/^noi cap/] },
     { nhom: 'Nối cáp ngầm', co: [/^noi cap ngam/, /hop noi cap|hop dau noi cap/] },
-    { nhom: 'Đào · hoàn trả mặt bằng', co: DAO_HOAN_TRA, tru: [VAT_TU_PHU] },
+    { nhom: 'Đào · hoàn trả mặt bằng', co: DAO_HOAN_TRA, tru: [VAT_TU_PHU, /ten mien|duong truyen/] },
   ],
   cap_luon_can: [
     { nhom: 'Dây · cáp lên đèn', co: [/day len den|cap (dien )?len den|day dan 3 ruot/] },
@@ -76,10 +76,14 @@ export const NHOM_THEO_LOAI = {
     { nhom: 'Khoá · phụ kiện tủ', co: [/o khoa|tui vai chong nuoc|bang ten tu|tam phip/] },
   ],
   // Thay sửa tủ để kết nối điều khiển tự động (PL Thay sửa tủ — loại KS mới 11/11/2026)
+  // Thay sửa tủ điều khiển (PL Thay sửa tủ — kết nối trung tâm điều khiển). Dựng theo tên thật HM106–HM135, HM151–HM163, HM358–HM432.
   thay_sua_tu: [
-    { nhom: 'Tủ điều khiển', co: [/tu dieu khien chieu sang/, /kieng tu|mong tu dieu khien/], tru: [/vo tu|^cung cap /] },
-    { nhom: 'Thiết bị điều khiển · kết nối', co: [/bo dieu khien|thiet bi dieu khien|ket noi|modem|plc|rtu|contactor|khoi dong tu|mccb|cb |aptomat/] },
-    { nhom: 'Khoá · phụ kiện tủ', co: [/o khoa|tui vai chong nuoc|bang ten tu|tam phip/] },
+    { nhom: 'Điều khiển · kết nối trung tâm', co: [/bo dieu khien (lap trinh|trung tam)|plc 10 i\/o/, /modem/, /bo nguon ac-dc|bo nguon 220/, /sim ket noi|goi data/, /cuong do sang/], tru: [/nang ha|^duy tri/] },
+    { nhom: 'Đo đếm · đồng hồ đa năng', co: [/bien dong (50|100)\/5a/, /dong ho da nang/] },
+    { nhom: 'Đo dòng rò', co: [/dong ro/] },
+    { nhom: 'Đóng cắt · bảo vệ trong tủ', co: [/contactor/, /mccb/, /rccb/, /\bmcb\b/, /rcbo trong tu/, /bo bao ve dien ap/, /do ?mi ?no|cau dau 3 cuc/, /chong set lan truyen/, /ro le (nhiet do|trung gian)/, /tu bu/], tru: [/cua tru|^thao do rcbo|cau chi ong/] },
+    { nhom: 'Tủ · vỏ tủ · phụ kiện', co: [/tu dieu khien chieu sang/, /kieng tu|mong tu dieu khien/, /vo tu/, /o khoa/, /tui vai chong nuoc/, /bang ten tu/, /tam phip/] },
+    { nhom: 'Tiếp địa tủ', co: [/tiep dia/, /dien tro dat/], tru: [/^thao do cap lam tiep dia/] },
   ],
   decal_so_tru: [
     { nhom: 'Decal · bảng tên', co: [/decal|bang ten tu/] },

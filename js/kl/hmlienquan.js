@@ -99,7 +99,8 @@ export function lienQuan(st, v, pl, { chiTrongGoi = true } = {}) {
   const klMacDinh = (m) => (/thang/.test(fold(catalog[m]?.dvt)) ? thang : 1);
   const tatCa = nhomCua(loai, catalog);
   const cap = capDiKem(tatCa.flatMap((n) => n.ma), catalog);
-  if (hd.length) nhom.push({ nhom: 'Hay dùng', hayDung: true, ma: hd.map((h) => ({ ...mo(h.ma, cap), lan: h.lan, klGoiY: h.klGoiY })) });
+  // Mã theo tháng: luôn lấy số tháng còn lại (KL học từ tháng khác sẽ lệch — chuyên gia nghiệp vụ vòng 2)
+  if (hd.length) nhom.push({ nhom: 'Hay dùng', hayDung: true, ma: hd.map((h) => ({ ...mo(h.ma, cap), lan: h.lan, klGoiY: /thang/.test(fold(catalog[h.ma]?.dvt)) ? thang : h.klGoiY })) });
   for (const n of tatCa) {
     const ds = xepCap(n.ma, cap).filter(trongGoi).map(doiCG);
     if (ds.length) nhom.push({ nhom: n.nhom, ma: ds.map((m) => mo(m, cap)) });

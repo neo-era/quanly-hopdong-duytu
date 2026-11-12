@@ -30,9 +30,14 @@ const fold = (x) => s(x).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replac
  * Loại phụ lục theo NỘI DUNG tiêu đề (anh gửi mẫu 21-09, 11/11/2026: số La Mã đổi theo từng đợt — đợt 4/5 PL I = tủ,
  * đợt 21-09 PL I = Hạ ngầm). Thứ tự so khớp quan trọng (chuyên gia kỹ thuật duyệt Bước 0). Không nhận ra → null.
  */
+// Khuôn chung (loại khảo sát chưa có mẫu riêng) — tiêu đề = tên hạng mục trong KS_MAP.tenHM (ks.js)
+const KHUON_CHUNG = [[/thay vo tu/, 'KS:vo_tu'], [/cap nguon noi/, 'KS:tc_noi'], [/cap luon can/, 'KS:cap_luon_can'], [/hop kin nuoc/, 'KS:hkn'],
+  [/thay can den/, 'KS:thay_can'], [/thay choa den/, 'KS:choa_den'], [/nap cua tru/, 'KS:nap_tru'], [/decal so tru/, 'KS:decal_so_tru'],
+  [/nang mong tru/, 'KS:nang_mong'], [/thao go bang ron/, 'KS:thao_go_bang_ron'], [/khac phuc su co/, 'KS:bao_cao_su_co']];
 export function loaiTuTieuDe(t) {
-  const f = fold(t);
+  const f = fold(t).replace(/^khoi luong thuoc tham quyen trung tam[^-]*-\s*/, '');
   if (!f) return null;
+  for (const [re, loai] of KHUON_CHUNG) if (re.test(f)) return loai;
   if (/tru trang tri/.test(f)) return 'PLIV';
   if (/hps.*(thu hoi|an ninh)/.test(f)) return 'HPS_AN';
   if (/my thuat/.test(f)) return 'MYTHUAT';
@@ -48,12 +53,14 @@ export function loaiTuTieuDe(t) {
 export function detectLoai(rows) {
   for (let i = 0; i < Math.min(rows.length, 8); i++) {
     for (const c of rows[i] || []) {
-      if (!/^Ph[ụu]\s*l[ụu]c\b/i.test(s(c))) continue;
+      // "Biểu TT-0n" = KL thẩm quyền Trung tâm do app xuất (cùng khuôn phụ lục) → kênh TT
+      const laTT = /^Bi[ểe]u\s+TT-\d+/i.test(s(c));
+      if (!laTT && !/^Ph[ụu]\s*l[ụu]c\b/i.test(s(c))) continue;
       for (let j = i + 1; j < Math.min(rows.length, i + 4); j++) {
         const t = (rows[j] || []).map(s).find(Boolean);
         if (!t) continue;
         const loai = loaiTuTieuDe(t);
-        if (loai) return { loai, row: i, tieuDeRow: j };
+        if (loai) return { loai, row: i, tieuDeRow: j, ...(laTT ? { kenh: 'TT' } : {}) };
         if (/^\(?Đính kèm/i.test(t)) break;
       }
       // Tiêu đề không nhận ra: số La Mã I–IV kiểu cũ chỉ dùng khi không có dòng tiêu đề nào
@@ -125,7 +132,7 @@ export function parsePLSheet(XLSX, ws, sheetName) {
       groups.push(g);
       continue;
     }
-    const v = readRow(r, cols, kc);
+    const v = readRow(r, cols, kc, tpl, ws, i + 1);
     v.row = i + 1; v.hidden = hidden.has(i); v.nhom = g ? g.ten : '';
     if (g && !v.goi && g.goi) v.goi = g.goi;
     if (g && !v.donVi && g.donVi) v.donVi = g.donVi;
@@ -138,15 +145,28 @@ export function parsePLSheet(XLSX, ws, sheetName) {
   // Nhóm không có số ở cột KL (vd PL II nhóm để trống) → coi số file = số đọc để không báo lệch giả
   for (const gg of groups) { if (gg.klFile === null) gg.klFile = gg.klDoc; delete gg.include; delete gg.goi; delete gg.donVi; }
   const tongDoc = viTri.reduce((a, v) => a + v.kl, 0);
+  // Đơn giá phụ lục: ô đơn giá đầu sheet (21-09: K4, I6, Q8, M6, J6) → nếu không có thì đơn giá ngầm định chung của mọi dòng.
+  // Dòng có tiền nhập tay khác KL × đơn giá → giữ tienTay (vd thay trụ: dòng trọn gói, dòng theo trụ).
+  const dgCell = tpl.donGiaCell || DG_CELL[det.loai];
+  let donGia = dgCell && isNum(ws[dgCell]?.v) ? ws[dgCell].v : null;
+  if (donGia === null) {
+    const ds = new Set(viTri.filter((v) => v.donGia).map((v) => Math.round(v.donGia)));
+    if (ds.size === 1 && viTri.every((v) => v.donGia || !v.tien)) donGia = [...ds][0];
+  }
+  for (const v of [...viTri, ...ngoai, ...klTrong]) {
+    if (v.tien !== undefined && !v.tienF && (donGia === null || Math.abs(v.tien - Math.floor((+v.kl || 0) * donGia)) > 1)) v.tienTay = v.tien;
+    if (donGia !== null && v.tienTay === undefined) delete v.donGia;
+    delete v.tien; delete v.tienF;
+  }
   return {
-    sheet: sheetName, loai: det.loai, tieuDe, congVan, klCol: KL, tongFile,
+    sheet: sheetName, loai: det.loai, ...(det.kenh ? { kenh: det.kenh } : {}), tieuDe, congVan, klCol: KL, tongFile, donGia,
     groups, viTri, ngoai, klTrong,
     checks: { tongDoc, khop: tongFile === null ? true : Math.abs(tongDoc - tongFile) < 1e-9, nhomLech: groups.filter((x) => Math.abs(x.klFile - x.klDoc) > 1e-9).map((x) => x.ten) },
     header: captureHeader(ws, hdr, tot),
   };
 }
 
-function readRow(r, cols, kc) {
+function readRow(r, cols, kc, tpl, ws, rowNo) {
   const v = {};
   for (const [field, L] of Object.entries(cols)) {
     const x = r[colIdx(L)];
@@ -163,14 +183,22 @@ function readRow(r, cols, kc) {
     if (textCols.has(j)) return; // không dò gói/đơn vị trong tên trạm, tuyến…
     const t = s(x);
     if (/^G[óo]i\s*\d+$/i.test(t)) v.goi = maGoiLocal(t);
-    else if (chuanCSKV(t)) v.donVi = chuanCSKV(t);
+    else if (chuanCSKV(t)) { v.donVi = chuanCSKV(t); if (t !== v.donVi) v.donViGoc = t; }
     else if (/^(CS\s|L[ữu] Gia)/i.test(t)) v.donVi = t;
     else if (/^Đợt\s*\d+/i.test(t)) v.dot = t;
     else if (j > last && isNum(x) && x >= 100000 && v.donGia === null) v.donGia = x;
   });
   if (/^Đợt\s*\d+/i.test(v.ghiChu || '')) v.dot = v.ghiChu;
+  // Thành tiền của dòng (cột tiền ngoài vùng in): công thức theo ô đơn giá ($K$4…) hay số nhập tay (PL thay trụ 21-09)
+  if (tpl?.tien && ws) {
+    const c = ws[tpl.tien + rowNo];
+    if (c && isNum(c.v)) { v.tien = c.v; v.tienF = !!(c.f && /\$/.test(c.f)); if (isNum(v.kl) && v.kl > 0) v.donGia = c.v / v.kl; }
+  }
+  if (tpl?.extra?.maQuan) { const mq = s(r[colIdx(tpl.extra.maQuan)]); if (/^[A-ZĐ0-9]{1,4}$/.test(mq)) v.maQuan = mq; }
   return v;
 }
+/** Ô đơn giá mặc định của khuôn cũ (khuôn mới khai donGiaCell trong mẫu). */
+const DG_CELL = { PLI: 'I6', PLII: 'Q8', PLIII: 'L5' };
 function maGoiLocal(t) { const m = s(t).match(/(\d+)/); return m ? 'G' + m[1] : null; }
 
 /** Giữ lại phần đầu sheet (tiêu đề, đầu cột) để khi xuất trả về đúng form của chính file đã nhập. */

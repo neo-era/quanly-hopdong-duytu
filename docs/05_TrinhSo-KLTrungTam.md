@@ -152,7 +152,7 @@ Bố cục:
 
 ### Chung
 - PWA; dọc / ngang / 360px; sáng / tối; vùng chạm ≥ 48px.
-- Toàn bộ test cũ vẫn đạt. Nạp JSON klvt cũ → doiChieu và xuất ra **giống hệt** trước.
+- Toàn bộ test cũ vẫn đạt. Nạp JSON klvt cũ → **doiChieu giống hệt** trước. File xuất chỉ khác các điểm đã chốt: thứ tự sheet + số La Mã theo mẫu 21-09; dòng phường mang Gói/CSKV/mã quận; SUBTOTAL cột phụ (hiện hữu, md cáp); tiền dòng = ROUNDDOWN(KL × ô đơn giá), dòng nhập tay giữ nguyên; ChiTiet_HM thêm cột Kênh; không xuất phụ lục rỗng.
 
 ## 4. Ca kiểm thử bắt buộc
 - Chèn cột chen giữa lúc đọc tiêu đề và lúc ghi → dòng mới không lệch cột.
@@ -178,3 +178,5 @@ Bố cục:
 | 11/11/2026 | Bước 0 v2 | Nghiệp vụ duy tu CS | Duyệt có điều kiện | X từ file giữ nguyên; chặn HPS trình Sở ở tăng cường KC xa; bỏ gợi ý PLIV cho KS; thay_sua_tu có STT/toạ độ; Ngầm hóa cũ → Thiếu KL, cột mới sau DIALUX; vo_tu ép TT; HPS_AN/MYTHUAT không sinh Biểu TT |
 | 11/11/2026 | Bước 0 v2 | Kỹ thuật | Duyệt có điều kiện → đã áp | Thứ tự triển khai capNhatCotSheet giờ vắng; newCols KPI; anhXa chịu thiếu cột; danh sách đủ chỗ cho thay_sua_tu, STT `TST`, nhãn "KL TT"; Ảnh dùng cột BONUS. Bước 0 chốt sau 2 vòng (các điều kiện còn lại đều đã ghi vào doc) |
 | 11/11/2026 | Chốt UI ô Trình Sở | UX/UI mobile | Chọn A (2 nút ngang) + chữ mô tả của B | Không chọn sẵn; nút đã chọn tô đặc + ✓ + viền 3px; ≥52px, ngang tối đa 480px, "Không trình Sở" không xuống dòng ở 320px; lỗi: viền đỏ cụm + dòng ⚠ + cuộn tới (tính thanh HĐ đáy); chặn HPS ngay khi bấm (role=alert + nút "Chuyển sang Không trình Sở"), nhắc nhẹ ⓘ cho loại thường TT; radiogroup/radio/aria-checked + mũi tên; dòng "→ …" aria-live đổi theo lựa chọn, "Cần gán gói" khi chưa có gói. Nhận NÊN: màu TS xanh dương / TT xanh lục dùng chung danh sách; bản cũ "chưa phân loại"; rung nhẹ |
+| 12/11/2026 | Chốt 2 (vòng 1) | Nghiệp vụ duy tu CS | Không duyệt → đã sửa | Đơn giá đọc từ ô đầu sheet (K4/I6/Q8/M6/J6), tiền dòng = ROUNDDOWN(KL × ô), dòng nhập tay (thay trụ) giữ; TongHop cộng cột Thành tiền; test khớp tiền theo gói với file 21-09; chặn xuất 2 phụ lục trình Sở cùng loại; bỏ sheet rỗng khi xuất theo gói + đánh số lại; chặn vị trí KS chưa gắn mã HM; mẫu Hạ ngầm chọn "× số trụ / × md cáp"; nhãn + cảnh báo trùng vị trí khác kênh; CSKV vị trí KS theo phường; biểu TT không ghi tiền theo đơn giá Sở; giữ chữ CSKV gốc + mã quận khi xuất |
+| 12/11/2026 | Chốt 2 (vòng 1) | QA + kỹ thuật | Duyệt có điều kiện → đã sửa | Nhập "đã thực hiện" chọn kênh khớp; đọc lại Biểu TT (kênh TT, khuôn chung); kiểm trùng lại khi văn phòng đặt kênh; Code.gs: ghi thẳng cột thì xoá giá trị chờ, điền bù chỉ ô trống + trong khoá; quy tắc HPS app HĐ = máy chủ (loại trừ LED); TongHop_TT gom "(chưa rõ gói)"; bỏ nhãn đổi kênh khi khớp lại; tên sheet "/" → "-"; H9 ghép theo tên sheet; câu tiêu chí "giống hệt" sửa như trên |

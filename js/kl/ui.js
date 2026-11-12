@@ -3,6 +3,7 @@
 import * as K from './core.js';
 import { PL_TEMPLATES } from './templates.js';
 import { tplCua } from './templates2.js';
+import * as LQ from './hmlienquan.js';
 import { NHOM_HM } from './parse.js';
 import * as KS from './ks.js';
 import { moKS } from './ksui.js';
@@ -925,16 +926,19 @@ function openViTri(id) {
   if (!v) return;
   const pl = S.phuLuc.find((p) => p.id === v.plId);
   const lines = (v.chiTiet || []).map((c) => ({ ...c, th: v.trangThai === 'da' ? ((v.thucHien || {})[c.ma] ?? c.kl) : '' }));
-  const row = (c, i) => `<tr><td><input class="kl-in n kl-ma" list="klHM2" value="${esc(c.ma)}" data-ln="${i}" data-lk="ma" aria-label="Mã HM"><div class="kl-sub">${esc(S.catalog[c.ma]?.ten || '')}</div></td>
+  const cgVT = LQ.laCanGio(v.phuong);
+  const row = (c, i) => `<tr class="${LQ.laMaCG(c.ma) && !cgVT ? 'lq-cgrow' : ''}"><td><input class="kl-in n kl-ma" list="klHM2" value="${esc(c.ma)}" data-ln="${i}" data-lk="ma" aria-label="Mã HM"><div class="kl-sub">${LQ.laMaCG(c.ma) && !cgVT ? '<b class="lq-cgtag">⚠ Mã Cần Giờ</b> ' : ''}${esc(S.catalog[c.ma]?.ten || '')}</div></td>
     <td><input class="kl-in n r" type="number" step="any" value="${esc(c.kl)}" data-ln="${i}" data-lk="kl" aria-label="KL kế hoạch"></td>
     <td><input class="kl-in n r" type="number" step="any" value="${esc(c.th)}" data-ln="${i}" data-lk="th" aria-label="KL thực hiện" placeholder="—"></td>
     <td><button class="ic del" data-lx="${i}" aria-label="Xoá dòng">🗑</button></td></tr>`;
   openModal(v.tram || 'Vị trí', `
     <div class="kl-vinfo"><span>${esc(tenPL(pl))}</span><span>${esc(v.phuong)} · ${esc(v.tuyen)}</span>${v.nguon?.ks ? `<span>Từ app Khảo sát: ${esc(KS.KS_MAP[v.nguon.type]?.ten || '')} · ${esc(v.nguon.stt || v.nguon.ks)}${v.nguon.xoa ? ' · bản khảo sát đã bị xoá' : ''}${v.nguon.doiSauTH ? ' · khảo sát đã đổi sau khi thực hiện' : ''}</span>` : ''}<span>KL ${fmt(v.kl)} ${esc(dvtPL(pl?.loai, v))} · ${esc(goiTen(v.goi))}${v.donVi ? ' · ' + esc(v.donVi) : ''}</span>${v.namLD ? `<span>Năm lắp đặt ${esc(v.namLD)}</span>` : ''}${v.ghiChu ? `<span>${esc(v.ghiChu)}</span>` : ''}</div>
     <datalist id="klHM2">${Object.entries(S.catalog).slice(0, 2500).map(([m, it]) => `<option value="${esc(m)}">${esc(it.ten)}</option>`).join('')}</datalist>
+    <div data-lqcg role="status"></div>
     <div class="tablewrap"><table class="kl-tb tight"><thead><tr><th>Mã HM · hạng mục</th><th class="r">KL kế hoạch</th><th class="r">KL thực hiện</th><th></th></tr></thead><tbody data-lines>${lines.map(row).join('')}</tbody></table></div>
     <div class="kl-row" style="margin-top:8px"><button class="btn ghost sm" data-lpick>+ Chọn mã HM (chọn nhiều)</button><button class="btn ghost sm" data-ladd>+ Dòng trống</button></div>
     <div data-picker></div>
+    <div class="lq" data-lq></div>
     <div class="kl-impf" style="margin-top:12px">
       <label class="fld"><span>Gói</span><select data-vg><option value="">—</option>${goiList(S, v.goi).map((g) => `<option value="${g}" ${v.goi === g ? 'selected' : ''}>${goiTen(g)}</option>`).join('')}</select></label>
       <label class="fld"><span>Trạng thái</span><select data-vs>${[['chua', 'Chưa làm'], ['dang', 'Đang làm'], ['da', 'Đã thực hiện']].map(([k, t]) => `<option value="${k}" ${v.trangThai === k ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
@@ -943,7 +947,7 @@ function openViTri(id) {
       ${K.kenhPL(pl) === 'TS' && !/^KS:|^KHAC$/.test(pl?.loai || '') ? `<label class="kl-chk ks-44"><input type="checkbox" data-vso ${v.nguon.thuocSo ? 'checked' : ''}> Thuộc tuyến Sở quản lý</label>` : ''}
       ${pl?.nhap ? `<label class="fld"><span>Kênh${v.kenhTay ? ' (văn phòng đặt)' : ' (người khảo sát chọn)'}</span><select data-vkenh><option value="TS" ${K.kenhPL(pl) === 'TS' ? 'selected' : ''}>Trình Sở — phụ lục trình Sở</option><option value="TT" ${K.kenhPL(pl) === 'TT' ? 'selected' : ''}>Không trình Sở — KL Trung tâm</option></select></label>` : ''}
       <label class="fld"><span>KL ngoài kế hoạch (cột X)</span><select data-vnk><option value="" ${v.ngoaiKHTay === undefined ? 'selected' : ''}>Tự động (${K.ngoaiKHCua(S, pl).get(v.id) || 'trống'})</option><option value="1" ${v.ngoaiKHTay === true ? 'selected' : ''}>Đánh X</option><option value="0" ${v.ngoaiKHTay === false ? 'selected' : ''}>Không đánh</option></select></label>` : ''}</div>
-    <div class="sheet-f"><button class="btn ghost" data-x>Huỷ</button><button class="btn amber" data-ap>Lưu</button></div>`, {
+    <div class="sheet-f"><span class="kl-sub lq-dem" data-lqn></span><button class="btn ghost" data-x>Huỷ</button>${viTriKe(S, v) ? '<button class="btn ghost" data-apke>Lưu &amp; sang vị trí kế</button>' : ''}<button class="btn amber" data-ap>Lưu</button></div>`, {
     wide: true,
     onMount: (el, close) => {
       const tb = el.querySelector('[data-lines]');
@@ -953,8 +957,14 @@ function openViTri(id) {
         goi: el.querySelector('[data-vg]').value || v.goi || '', daCo: new Set(read().map((c) => c.ma).filter(Boolean)),
         onAdd: (ds) => { const cur = read().filter((c) => c.ma || c.kl !== 1); ds.forEach((ma) => cur.push({ ma, kl: 1, th: '' })); tb.innerHTML = cur.map(row).join(''); api.toast(`Đã thêm ${ds.length} mã — nhập KL cho từng mã.`, 'ok'); },
       });
-      tb.onclick = (e) => { const x = e.target.closest('[data-lx]'); if (!x) return; const cur = read(); cur.splice(+x.dataset.lx, 1); tb.innerHTML = cur.map(row).join(''); };
-      el.querySelector('[data-ap]').onclick = async () => {
+      tb.onclick = (e) => { const x = e.target.closest('[data-lx]'); if (!x) return; const cur = read(); cur.splice(+x.dataset.lx, 1); tb.innerHTML = cur.map(row).join(''); veLQ(); };
+      // ---- Hạng mục liên quan (docs/06): tick = có dòng trong bảng, 2 chiều ----
+      const ghi = (cur) => { tb.innerHTML = cur.map(row).join(''); veLQ(); };
+      const lq = { mo: new Set(['Hay dùng']), ngoaiGoi: false, tim: '', hoanTac: null };
+      const veLQ = () => moLienQuan(el, S, v, pl, lq, read, ghi);
+      tb.addEventListener('input', (e) => { if (e.target.dataset.lk) { clearTimeout(lq.t); lq.t = setTimeout(veLQ, 250); } });
+      veLQ();
+      const luu = async () => {
         const raw = read().filter((c) => c.ma);
         // Gộp dòng trùng mã: cộng KL kế hoạch và KL thực hiện
         const gm = new Map();
@@ -978,10 +988,96 @@ function openViTri(id) {
           const custom = cur.filter((c) => c.th !== '' && +c.th !== c.kl);
           v.thucHien = trangThai === 'da' && custom.length ? Object.fromEntries(cur.map((c) => [c.ma, c.th === '' ? c.kl : +c.th])) : null;
         });
-        close(); api.toast('Đã lưu vị trí.', 'ok'); rerender();
+        viTriTruoc = { loai: LQ.loaiNhom(v, pl), id: v.id, tram: v.tram, kl: v.kl, chiTiet: (v.chiTiet || []).map((c) => ({ ...c })) };
+        return true;
       };
+      el.querySelector('[data-ap]').onclick = async () => { if (await luu()) { close(); api.toast('Đã lưu vị trí.', 'ok'); rerender(); } };
+      const ke = el.querySelector('[data-apke]');
+      if (ke) ke.onclick = async () => { const n = viTriKe(S, v); if (await luu()) { api.toast('Đã lưu — sang vị trí kế.', 'ok'); rerender(); openViTri(n.id); } };
     },
   });
+}
+/** Vị trí kế tiếp trong cùng phụ lục (theo STT) — để làm liên tục. */
+function viTriKe(S, v) {
+  const ds = S.viTri.filter((x) => x.plId === v.plId).sort((a, b) => (+a.stt || 0) - (+b.stt || 0));
+  const i = ds.findIndex((x) => x.id === v.id);
+  return i >= 0 ? ds[i + 1] || null : null;
+}
+// Vị trí vừa lưu trong phiên — cho nút "Như vị trí trước"
+let viTriTruoc = null;
+
+/**
+ * Khối "Hạng mục liên quan" trong hộp Chi tiết vị trí (docs/06 L1–L8, Chốt UI: nền A + chip nhóm/bước KL của B).
+ * read(): đọc bảng hiện tại; ghi(cur): vẽ lại bảng + khối này.
+ */
+function moLienQuan(el, S, v, pl, lq, read, ghi) {
+  const host = el.querySelector('[data-lq]');
+  const cur = read();
+  const co = new Map(cur.filter((c) => c.ma).map((c) => [c.ma, c]));
+  const goiNow = el.querySelector('[data-vg]')?.value || v.goi || '';
+  const vNow = { ...v, goi: goiNow, chiTiet: cur.filter((c) => c.ma) };
+  const r = LQ.lienQuan(S, vNow, pl, { chiTrongGoi: !lq.ngoaiGoi });
+  const klVT = +v.kl > 0 ? +v.kl : 1;
+  const tenLoai = KS.KS_MAP[r.loai]?.ten || tenPL(pl);
+  // Cảnh báo mã Cần Giờ (giữ KL khi đổi)
+  const cgBox = el.querySelector('[data-lqcg]');
+  cgBox.innerHTML = r.trungCap.map(([a, b]) => `<div class="lq-warn"><span>⚠ Có cả <b>${esc(a)}</b> (thay thế) và <b>${esc(b)}</b> (lắp đặt) cùng thiết bị — có thể tính trùng nhân công lắp. Kiểm tra lại.</span></div>`).join('') + r.canhBaoCG.map((c) => `<div class="lq-warn"><span>⚠ <b>${esc(c.ma)}</b> là mã Cần Giờ — vị trí ở ${esc(v.phuong || 'ngoài Cần Giờ')}.</span>${c.thay ? `<button class="btn ghost sm lq-44" data-lqdoi="${esc(c.ma)}" data-lqthay="${esc(c.thay)}">Đổi sang ${esc(c.thay)}</button>` : ''}</div>`).join('');
+  cgBox.onclick = (e) => { const b = e.target.closest('[data-lqdoi]'); if (!b) return; ghi(read().map((c) => (c.ma === b.dataset.lqdoi ? { ...c, ma: b.dataset.lqthay } : c))); };
+  const tim = khongDau(lq.tim).trim();
+  const hop = (x) => !tim || khongDau(x.ma + ' ' + x.ten).includes(tim);
+  const nhom = r.nhom.map((n) => ({ ...n, ma: n.ma.filter(hop) })).filter((n) => n.ma.length);
+  const truoc = viTriTruoc && viTriTruoc.loai === r.loai && viTriTruoc.id !== v.id && viTriTruoc.chiTiet.length ? viTriTruoc : null;
+  const dong = (x, n) => {
+    const on = co.has(x.ma);
+    const c = co.get(x.ma);
+    // "Thay thế" và "Lắp đặt" cùng thiết bị là 2 cách tính thay nhau (chuyên gia nghiệp vụ 12/11) — chỉ nhắc, không gợi ý thêm
+    const nhan = `${x.ma} ${x.ten}${x.diKem ? ', hoặc ' + x.diKem : ''}`;
+    return `<div class="lq-it ${on ? 'on' : ''}"><label class="lq-l"><input type="checkbox" data-lqma="${esc(x.ma)}" data-lqkl="${x.klGoiY || 1}" ${on ? 'checked' : ''} aria-label="${esc(nhan)}">
+      <span class="lq-t"><b class="n">${esc(x.ma)}</b> ${esc(x.ten)} <span class="kl-sub">${esc(x.dvt)}</span>
+      ${x.lan ? `<span class="lq-p k">${x.lan} lần${x.klGoiY && x.klGoiY !== 1 ? ' · thường ' + fmt(x.klGoiY) : ''}</span>` : ''}${x.diKem ? `<span class="lq-p">↔ hoặc ${esc(x.diKem)}</span>` : ''}${x.cg ? '<span class="lq-p w">Cần Giờ</span>' : ''}</span></label>
+      ${on ? `<div class="lq-step" role="group" aria-label="KL kế hoạch ${esc(x.ma)}"><button class="ic lq-44" data-lqst="${esc(x.ma)}" data-d="-1" aria-label="Giảm">−</button><input class="kl-in n r lq-44" type="number" step="any" min="0" value="${esc(c.kl)}" data-lqv="${esc(x.ma)}" aria-label="KL ${esc(x.ma)}"><button class="ic lq-44" data-lqst="${esc(x.ma)}" data-d="1" aria-label="Tăng">+</button></div>` : ''}
+</div>`;
+  };
+  const dem = (n) => n.ma.filter((x) => co.has(x.ma)).length;
+  host.innerHTML = !r.loai && !r.nhom.length ? '' : `<div class="lq-h"><b>Hạng mục liên quan — ${esc(tenLoai)}</b><span class="kl-sub">Tick để thêm vào bảng, bỏ tick để bỏ.</span></div>
+    <div class="lq-bar">
+      <div class="lq-chips" role="tablist" aria-label="Nhóm hạng mục">${nhom.map((n, i) => `<button class="lq-chip ${lq.mo.has(n.nhom) ? 'on' : ''}" data-lqchip="${i}" aria-controls="lqg${i}">${n.hayDung ? '★ ' : ''}${esc(n.nhom)} <span>${dem(n)}/${n.ma.length}</span></button>`).join('')}</div>
+      <div class="lq-tools"><input class="kl-in lq-44" type="search" data-lqtim value="${esc(lq.tim)}" placeholder="Tìm trong danh sách liên quan" aria-label="Tìm trong hạng mục liên quan">
+        ${goiNow && goiNow !== 'nhieu' ? `<label class="kl-chk"><input type="checkbox" data-lqng ${lq.ngoaiGoi ? 'checked' : ''}> Cả mã ngoài HĐ ${goiTen(goiNow)}</label>` : ''}
+        ${truoc ? `<button class="btn ghost sm lq-44" data-lqtruoc>↺ Như vị trí trước (${esc(truoc.tram || '')} · ${truoc.chiTiet.length} mã)</button>` : ''}
+        ${lq.hoanTac ? '<button class="btn ghost sm lq-44" data-lqundo>↶ Hoàn tác</button>' : ''}</div>
+      <div data-lqhoi></div></div>
+    ${nhom.map((n, i) => { const mo = lq.mo.has(n.nhom) || !!tim; return `<section class="lq-g" id="lqg${i}"><button class="lq-gh" data-lqg="${esc(n.nhom)}" aria-expanded="${mo}">${n.hayDung ? '★ ' : ''}${esc(n.nhom)}<span class="kl-sub">${dem(n)}/${n.ma.length} ${mo ? '▾' : '▸'}</span></button>${mo ? n.ma.slice(0, n.hayDung && !lq.hdDu ? 6 : 999).map((x) => dong(x, n)).join('') + (n.hayDung && !lq.hdDu && n.ma.length > 6 ? '<button class="btn ghost sm lq-44" data-lqhd>Xem thêm</button>' : '') : ''}</section>`; }).join('')}
+    ${!nhom.length ? `<div class="kl-sub" style="padding:8px">${tim ? 'Không có mã khớp — dùng "+ Chọn mã HM" để tìm trong toàn bộ danh mục.' : 'Chưa có danh sách liên quan cho loại này — dùng "+ Chọn mã HM".'}</div>` : ''}`;
+  el.querySelector('[data-lqn]').textContent = co.size ? `Đã chọn ${co.size} mã` : '';
+  const them = (ma, kl) => { const c2 = read().filter((c) => c.ma || c.kl !== 1); if (!c2.some((c) => c.ma === ma)) c2.push({ ma, kl, th: '' }); ghi(c2); };
+  host.onchange = (e) => {
+    const cb = e.target.closest('[data-lqma]');
+    if (cb) { const ma = cb.dataset.lqma; if (cb.checked) them(ma, Math.round((+cb.dataset.lqkl || 1) * klVT * 1000) / 1000); else ghi(read().filter((c) => c.ma !== ma)); return; }
+    if (e.target.matches('[data-lqng]')) { lq.ngoaiGoi = e.target.checked; ghi(read()); }
+    const kv = e.target.closest('[data-lqv]');
+    if (kv) ghi(read().map((c) => (c.ma === kv.dataset.lqv ? { ...c, kl: +kv.value || 0 } : c)));
+  };
+  host.oninput = (e) => { if (e.target.matches('[data-lqtim]')) { lq.tim = e.target.value; clearTimeout(lq.tt); lq.tt = setTimeout(() => { const pos = e.target.selectionStart; ghi(read()); const t = host.querySelector('[data-lqtim]'); t.focus(); t.setSelectionRange(pos, pos); }, 200); } };
+  host.onclick = async (e) => {
+    const g = e.target.closest('[data-lqg]');
+    if (g) { lq.mo.has(g.dataset.lqg) ? lq.mo.delete(g.dataset.lqg) : lq.mo.add(g.dataset.lqg); return ghi(read()); }
+    const ch = e.target.closest('[data-lqchip]');
+    if (ch) { const n = nhom[+ch.dataset.lqchip]; lq.mo.add(n.nhom); ghi(read()); host.querySelector('#lqg' + ch.dataset.lqchip)?.scrollIntoView({ block: 'start', behavior: 'smooth' }); return; }
+    const st2 = e.target.closest('[data-lqst]');
+    if (st2) return ghi(read().map((c) => (c.ma === st2.dataset.lqst ? { ...c, kl: Math.max(0, Math.round(((+c.kl || 0) + (+st2.dataset.d)) * 1000) / 1000) } : c)));
+    if (e.target.closest('[data-lqhd]')) { lq.hdDu = true; return ghi(read()); }
+    if (e.target.closest('[data-lqundo]')) { const h = lq.hoanTac; lq.hoanTac = null; return ghi(h); }
+    if (e.target.closest('[data-lqtruoc]')) {
+      const moi = LQ.nhuViTriTruoc(truoc, v).map((c) => ({ ...c, th: '' }));
+      const dang = read().filter((c) => c.ma);
+      const lam = (ds) => { lq.hoanTac = read(); ghi(ds); api.toast(`Đã chép ${moi.length} mã từ ${truoc.tram || 'vị trí trước'} — bấm Hoàn tác nếu nhầm.`, 'ok'); clearTimeout(lq.ht); lq.ht = setTimeout(() => { if (lq.hoanTac) { lq.hoanTac = null; ghi(read()); } }, 15000); };
+      if (!dang.length) return lam(moi);
+      host.querySelector('[data-lqhoi]').innerHTML = `<div class="lq-hoi">Bảng đang có ${dang.length} mã. <button class="btn ghost sm lq-44" data-lqthay2>Thay bằng ${moi.length} mã</button><button class="btn ghost sm lq-44" data-lqgop>Gộp thêm</button></div>`;
+      host.querySelector('[data-lqthay2]').onclick = () => lam(moi);
+      host.querySelector('[data-lqgop]').onclick = () => { const m = new Map(dang.map((c) => [c.ma, c])); moi.forEach((c) => { if (!m.has(c.ma)) m.set(c.ma, c); }); lam([...m.values()]); };
+    }
+  };
 }
 
 // ---- Xuất Excel trình Sở ----

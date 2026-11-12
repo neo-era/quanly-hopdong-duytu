@@ -1012,6 +1012,7 @@ let viTriTruoc = null;
  */
 function moLienQuan(el, S, v, pl, lq, read, ghi) {
   const host = el.querySelector('[data-lq]');
+  const lai = () => moLienQuan(el, S, v, pl, lq, read, ghi);   // chỉ vẽ lại khối này — không đụng bảng đang gõ
   const cur = read();
   const co = new Map(cur.filter((c) => c.ma).map((c) => [c.ma, c]));
   const goiNow = el.querySelector('[data-vg]')?.value || v.goi || '';
@@ -1022,7 +1023,13 @@ function moLienQuan(el, S, v, pl, lq, read, ghi) {
   // Cảnh báo mã Cần Giờ (giữ KL khi đổi)
   const cgBox = el.querySelector('[data-lqcg]');
   cgBox.innerHTML = r.trungCap.map(([a, b]) => `<div class="lq-warn"><span>⚠ Có cả <b>${esc(a)}</b> (thay thế) và <b>${esc(b)}</b> (lắp đặt) cùng thiết bị — có thể tính trùng nhân công lắp. Kiểm tra lại.</span></div>`).join('') + r.canhBaoCG.map((c) => `<div class="lq-warn"><span>⚠ <b>${esc(c.ma)}</b> là mã Cần Giờ — vị trí ở ${esc(v.phuong || 'ngoài Cần Giờ')}.</span>${c.thay ? `<button class="btn ghost sm lq-44" data-lqdoi="${esc(c.ma)}" data-lqthay="${esc(c.thay)}">Đổi sang ${esc(c.thay)}</button>` : ''}</div>`).join('');
-  cgBox.onclick = (e) => { const b = e.target.closest('[data-lqdoi]'); if (!b) return; ghi(read().map((c) => (c.ma === b.dataset.lqdoi ? { ...c, ma: b.dataset.lqthay } : c))); };
+  cgBox.onclick = (e) => {
+    const b = e.target.closest('[data-lqdoi]'); if (!b) return;
+    const ds = read();
+    // Bảng đã có mã thường → bỏ dòng mã Cần Giờ thay vì đổi (tránh gộp KL gấp đôi khi Lưu)
+    if (ds.some((c) => c.ma === b.dataset.lqthay)) { ghi(ds.filter((c) => c.ma !== b.dataset.lqdoi)); api.toast(`Đã có ${b.dataset.lqthay} — bỏ dòng ${b.dataset.lqdoi}.`, 'ok'); return; }
+    ghi(ds.map((c) => (c.ma === b.dataset.lqdoi ? { ...c, ma: b.dataset.lqthay } : c)));
+  };
   const tim = khongDau(lq.tim).trim();
   const hop = (x) => !tim || khongDau(x.ma + ' ' + x.ten).includes(tim);
   const nhom = r.nhom.map((n) => ({ ...n, ma: n.ma.filter(hop) })).filter((n) => n.ma.length);
@@ -1041,8 +1048,8 @@ function moLienQuan(el, S, v, pl, lq, read, ghi) {
   const dem = (n) => n.ma.filter((x) => co.has(x.ma)).length;
   host.innerHTML = !r.loai && !r.nhom.length ? '' : `<div class="lq-h"><b>Hạng mục liên quan — ${esc(tenLoai)}</b><span class="kl-sub">Tick để thêm vào bảng, bỏ tick để bỏ.</span></div>
     <div class="lq-bar">
-      <div class="lq-chips" role="tablist" aria-label="Nhóm hạng mục">${nhom.map((n, i) => `<button class="lq-chip ${lq.mo.has(n.nhom) ? 'on' : ''}" data-lqchip="${i}" aria-controls="lqg${i}">${n.hayDung ? '★ ' : ''}${esc(n.nhom)} <span>${dem(n)}/${n.ma.length}</span></button>`).join('')}</div>
-      <div class="lq-tools"><input class="kl-in lq-44" type="search" data-lqtim value="${esc(lq.tim)}" placeholder="Tìm trong danh sách liên quan" aria-label="Tìm trong hạng mục liên quan">
+      <div class="lq-chips" role="group" aria-label="Nhóm hạng mục">${nhom.map((n, i) => `<button class="lq-chip ${lq.mo.has(n.nhom) ? 'on' : ''}" data-lqchip="${i}" aria-controls="lqg${i}" aria-expanded="${lq.mo.has(n.nhom)}">${n.hayDung ? '★ ' : ''}${esc(n.nhom)} <span>${dem(n)}/${n.ma.length}</span></button>`).join('')}</div>
+      <div class="lq-tools"><input class="kl-in lq-44" type="search" data-lqtim value="${esc(lq.tim)}" placeholder="Tìm mã/tên…" aria-label="Tìm trong hạng mục liên quan">
         ${goiNow && goiNow !== 'nhieu' ? `<label class="kl-chk"><input type="checkbox" data-lqng ${lq.ngoaiGoi ? 'checked' : ''}> Cả mã ngoài HĐ ${goiTen(goiNow)}</label>` : ''}
         ${truoc ? `<button class="btn ghost sm lq-44" data-lqtruoc>↺ Như vị trí trước (${esc(truoc.tram || '')} · ${truoc.chiTiet.length} mã)</button>` : ''}
         ${lq.hoanTac ? '<button class="btn ghost sm lq-44" data-lqundo>↶ Hoàn tác</button>' : ''}</div>
@@ -1054,24 +1061,24 @@ function moLienQuan(el, S, v, pl, lq, read, ghi) {
   host.onchange = (e) => {
     const cb = e.target.closest('[data-lqma]');
     if (cb) { const ma = cb.dataset.lqma; if (cb.checked) them(ma, Math.round((+cb.dataset.lqkl || 1) * klVT * 1000) / 1000); else ghi(read().filter((c) => c.ma !== ma)); return; }
-    if (e.target.matches('[data-lqng]')) { lq.ngoaiGoi = e.target.checked; ghi(read()); }
+    if (e.target.matches('[data-lqng]')) { lq.ngoaiGoi = e.target.checked; lai(); }
     const kv = e.target.closest('[data-lqv]');
     if (kv) ghi(read().map((c) => (c.ma === kv.dataset.lqv ? { ...c, kl: +kv.value || 0 } : c)));
   };
-  host.oninput = (e) => { if (e.target.matches('[data-lqtim]')) { lq.tim = e.target.value; clearTimeout(lq.tt); lq.tt = setTimeout(() => { const pos = e.target.selectionStart; ghi(read()); const t = host.querySelector('[data-lqtim]'); t.focus(); t.setSelectionRange(pos, pos); }, 200); } };
+  host.oninput = (e) => { if (e.target.matches('[data-lqtim]')) { lq.tim = e.target.value; clearTimeout(lq.tt); lq.tt = setTimeout(() => { const pos = e.target.selectionStart; lai(); const t = host.querySelector('[data-lqtim]'); t.focus(); t.setSelectionRange(pos, pos); }, 200); } };
   host.onclick = async (e) => {
     const g = e.target.closest('[data-lqg]');
-    if (g) { lq.mo.has(g.dataset.lqg) ? lq.mo.delete(g.dataset.lqg) : lq.mo.add(g.dataset.lqg); return ghi(read()); }
+    if (g) { lq.mo.has(g.dataset.lqg) ? lq.mo.delete(g.dataset.lqg) : lq.mo.add(g.dataset.lqg); return lai(); }
     const ch = e.target.closest('[data-lqchip]');
-    if (ch) { const n = nhom[+ch.dataset.lqchip]; lq.mo.add(n.nhom); ghi(read()); host.querySelector('#lqg' + ch.dataset.lqchip)?.scrollIntoView({ block: 'start', behavior: 'smooth' }); return; }
+    if (ch) { const n = nhom[+ch.dataset.lqchip]; lq.mo.add(n.nhom); lai(); host.querySelector('#lqg' + ch.dataset.lqchip)?.scrollIntoView({ block: 'start', behavior: 'smooth' }); return; }
     const st2 = e.target.closest('[data-lqst]');
     if (st2) return ghi(read().map((c) => (c.ma === st2.dataset.lqst ? { ...c, kl: Math.max(0, Math.round(((+c.kl || 0) + (+st2.dataset.d)) * 1000) / 1000) } : c)));
-    if (e.target.closest('[data-lqhd]')) { lq.hdDu = true; return ghi(read()); }
+    if (e.target.closest('[data-lqhd]')) { lq.hdDu = true; return lai(); }
     if (e.target.closest('[data-lqundo]')) { const h = lq.hoanTac; lq.hoanTac = null; return ghi(h); }
     if (e.target.closest('[data-lqtruoc]')) {
       const moi = LQ.nhuViTriTruoc(truoc, v).map((c) => ({ ...c, th: '' }));
       const dang = read().filter((c) => c.ma);
-      const lam = (ds) => { lq.hoanTac = read(); ghi(ds); api.toast(`Đã chép ${moi.length} mã từ ${truoc.tram || 'vị trí trước'} — bấm Hoàn tác nếu nhầm.`, 'ok'); clearTimeout(lq.ht); lq.ht = setTimeout(() => { if (lq.hoanTac) { lq.hoanTac = null; ghi(read()); } }, 15000); };
+      const lam = (ds) => { lq.hoanTac = read(); ghi(ds); api.toast(`Đã chép ${moi.length} mã từ ${truoc.tram || 'vị trí trước'} — bấm Hoàn tác nếu nhầm.`, 'ok'); clearTimeout(lq.ht); lq.ht = setTimeout(() => { if (lq.hoanTac && host.isConnected) { lq.hoanTac = null; lai(); } }, 15000); };
       if (!dang.length) return lam(moi);
       host.querySelector('[data-lqhoi]').innerHTML = `<div class="lq-hoi">Bảng đang có ${dang.length} mã. <button class="btn ghost sm lq-44" data-lqthay2>Thay bằng ${moi.length} mã</button><button class="btn ghost sm lq-44" data-lqgop>Gộp thêm</button></div>`;
       host.querySelector('[data-lqthay2]').onclick = () => lam(moi);

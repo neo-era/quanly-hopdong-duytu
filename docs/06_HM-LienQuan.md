@@ -29,3 +29,6 @@ App Quản lý HĐ — hộp Chi tiết vị trí (và bảng "Mẫu chi tiết 
 ## Nhật ký duyệt
 | Ngày | Chốt | Chuyên gia | Quyết định | Thay đổi đã áp |
 |---|---|---|---|---|
+| 12/11/2026 | Chốt UI | UX/UI mobile | Ghép: nền A + chip nhóm / bước KL của B | Chip nhóm có n/m, cả dòng bấm được ≥44px, bước −/+ trên dòng đã tick, "Như vị trí trước" hỏi Thay/Gộp + Hoàn tác, cảnh báo Cần Giờ có chữ + nút 44px giữ KL, đếm "Đã chọn n" ở chân hộp, aria. Giữ bảng chi tiết (cần KL thực hiện + mã ngoài danh sách) — UX đồng ý ở vòng 2 |
+| 12/11/2026 | Bước 0 / lõi | Nghiệp vụ duy tu CS | Có điều kiện → vòng 2 DUYỆT | Thay thế ↔ Lắp đặt là 2 cách tính thay nhau: nhãn "↔ hoặc", cảnh báo khi tick cả hai, không gợi ý thêm; bổ sung mã tủ (chống sét lan truyền, rơ le, tụ bù, đô mi nô, nguồn 48VDC, cường độ sáng, tiếp địa); loại HM098, HM559; cặp PLC; ĐVT theo tháng = số tháng còn lại; hay dùng gộp _cg |
+| 12/11/2026 | Chốt 2 | UX + QA | Có điều kiện → đã sửa | Hết giờ Hoàn tác / ô tìm chỉ vẽ lại khối liên quan (không viết lại bảng đang gõ); bỏ role tablist, chip có aria-expanded; chữ gợi ý ô tìm ngắn. Nhận NÊN: "Đổi sang mã thường" khi bảng đã có mã đó → bỏ dòng _cg (tránh gộp KL gấp đôi) |

@@ -1,6 +1,6 @@
 // parse.js — Đọc phụ lục trình Sở và bảng giá HĐ. Hàm thuần, nhận thư viện XLSX (SheetJS) từ ngoài vào.
 // Nguyên tắc: chỉ dùng số CÓ THẬT trong ô; vị trí được tính khi nằm trong vùng công thức cộng của dòng phường.
-import { PL_TEMPLATES } from './templates.js';
+import { tplCua } from './templates2.js';
 
 const LOAI_BY_ROMAN = { I: 'PLI', II: 'PLII', III: 'PLIII', IV: 'PLIV' };
 const s = (v) => (v === null || v === undefined ? '' : String(v)).trim();
@@ -25,14 +25,52 @@ export function rowsInFormula(f, col) {
   return any ? [...out].sort((x, y) => x - y) : null;
 }
 
-/** Nhận loại phụ lục từ các dòng đầu ("Phụ lục I/II/III/IV"). */
+const fold = (x) => s(x).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/gi, 'd').toLowerCase().replace(/\s+/g, ' ');
+/**
+ * Loại phụ lục theo NỘI DUNG tiêu đề (anh gửi mẫu 21-09, 11/11/2026: số La Mã đổi theo từng đợt — đợt 4/5 PL I = tủ,
+ * đợt 21-09 PL I = Hạ ngầm). Thứ tự so khớp quan trọng (chuyên gia kỹ thuật duyệt Bước 0). Không nhận ra → null.
+ */
+export function loaiTuTieuDe(t) {
+  const f = fold(t);
+  if (!f) return null;
+  if (/tru trang tri/.test(f)) return 'PLIV';
+  if (/hps.*(thu hoi|an ninh)/.test(f)) return 'HPS_AN';
+  if (/my thuat/.test(f)) return 'MYTHUAT';
+  if (/ha ngam|ngam hoa/.test(f)) return 'HANGAM';
+  if (/thay the cap (nguon )?ngam/.test(f)) return 'CAPNGAM';
+  if (/tu dieu khien/.test(f)) return 'PLI';
+  if (/hps.*led|den (chieu sang )?led/.test(f) && !/tang cuong|trang tri/.test(f)) return 'PLII';
+  if (/tang cuong/.test(f)) return 'TANGCUONG';
+  if (/thay the tru|tru chieu sang/.test(f)) return 'PLIII';
+  return null;
+}
+/** Nhận loại phụ lục: dòng "Phụ lục …" rồi đọc dòng tiêu đề kế tiếp. Tiêu đề lạ (vd mẫu đèn trang trí cũ) → null. */
 export function detectLoai(rows) {
   for (let i = 0; i < Math.min(rows.length, 8); i++) {
     for (const c of rows[i] || []) {
-      const m = s(c).match(/^Ph[ụu]\s*l[ụu]c\s+(IV|I{1,3})\b/i);
-      if (m) return { loai: LOAI_BY_ROMAN[m[1].toUpperCase()], row: i };
+      if (!/^Ph[ụu]\s*l[ụu]c\b/i.test(s(c))) continue;
+      for (let j = i + 1; j < Math.min(rows.length, i + 4); j++) {
+        const t = (rows[j] || []).map(s).find(Boolean);
+        if (!t) continue;
+        const loai = loaiTuTieuDe(t);
+        if (loai) return { loai, row: i, tieuDeRow: j };
+        if (/^\(?Đính kèm/i.test(t)) break;
+      }
+      // Tiêu đề không nhận ra: số La Mã I–IV kiểu cũ chỉ dùng khi không có dòng tiêu đề nào
+      const m = s(c).match(/^Ph[ụu]\s*l[ụu]c\s+(IV|I{1,3})$/i);
+      const coTieuDe = (rows[i + 1] || []).some((x) => s(x));
+      if (m && !coTieuDe) return { loai: LOAI_BY_ROMAN[m[1].toUpperCase()], row: i, tieuDeRow: i + 1 };
+      return { loai: null, row: i };
     }
   }
+  return null;
+}
+/** Đơn vị (CSKV) — chuẩn hoá nhãn: CSTT = "CST Tâm" = "CS T Tâm" = CS Trung tâm; "LG" = Lữ Gia. */
+export function chuanCSKV(t) {
+  const f = fold(t).replace(/\./g, '');
+  if (/^(cstt|cs ?t ?tam|cs trung tam|cskv trung tam|cskvtt)$/.test(f)) return 'CS Trung tâm';
+  if (/^(lg|lu gia)$/.test(f)) return 'Lữ Gia';
+  if (/^cs ?(tay|bac|nam|dong)$/.test(f)) return 'CS ' + { tay: 'Tây', bac: 'Bắc', nam: 'Nam', dong: 'Đông' }[f.replace(/^cs ?/, '')];
   return null;
 }
 
@@ -42,22 +80,28 @@ export function parsePLSheet(XLSX, ws, sheetName) {
   const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null, blankrows: true });
   const det = detectLoai(rows);
   if (!det) return null;
-  const tpl = PL_TEMPLATES[det.loai];
+  if (!det.loai) return { sheet: sheetName, loai: null, loi: 'Không nhận ra loại phụ lục từ tiêu đề — bỏ qua sheet này.' };
+  const tpl = tplCua(det.loai);
   const hdr = rows.findIndex((r) => s(r?.[0]) === 'Stt');
   if (hdr < 0) return { sheet: sheetName, loai: det.loai, loi: 'Không thấy dòng tiêu đề cột "Stt".' };
+  // Khuôn cũ (Tuyến đường · Quận – Huyện, không có cột Trạm đèn) — vd mẫu ẩn năm 2021/2022 trong file 21-09
+  if (!/^Tr[ạa]m/i.test(s(rows[hdr][colIdx(tpl.cols.tram)]))) return { sheet: sheetName, loai: det.loai, loi: 'Khuôn phụ lục cũ (không có cột "Trạm đèn") — không nhập.' };
 
   // Cột KL: tiêu đề "Khối lượng (đề xuất|thực hiện) Duy trì…"; không thấy thì theo mẫu
-  let kc = (rows[hdr] || []).findIndex((x) => /^Kh[ốo]i l[ưu][ợo]ng (đề xuất|th[ưự]c hiện) Duy tr[ìi]/i.test(s(x)));
-  if (kc < 0) kc = colIdx(tpl.kl);
+  let kc = tpl.kl2 ? -1 : (rows[hdr] || []).findIndex((x) => /^Kh[ốo]i l[ưu][ợo]ng (đề xuất|th[ưự]c hiện) Duy tr[ìi]/i.test(s(x)));
+  if (kc < 0) kc = colIdx(tpl.kl);   // mẫu có 2 cột KL (Hạ ngầm: cáp + trụ) → theo mẫu
   const KL = colLetter(kc);
 
-  const tieuDe = s(rows[det.row + 1]?.[0]);
+  const tieuDe = s((rows[det.tieuDeRow ?? det.row + 1] || []).map(s).find(Boolean));
   const congVan = s(rows.slice(det.row + 1, hdr).map((r) => r?.[0]).find((x) => /Đính kèm/i.test(s(x))));
 
   // Dòng TỔNG CỘNG (ô nào trong dòng cũng được)
   let tot = -1;
   for (let i = hdr + 1; i < rows.length && tot < 0; i++) if ((rows[i] || []).some((c) => /^T[ỔO]NG C[ỘO]NG/i.test(s(c)))) tot = i;
   const tongFile = tot >= 0 && isNum(rows[tot][kc]) ? rows[tot][kc] : null;
+  // Công thức TỔNG CỘNG liệt kê từng vùng (file 21-09: dòng phường ghi SUM sai 1 ô nhưng TỔNG vẫn tính đủ) → dòng nằm trong TỔNG vẫn nhận
+  const totF = tot >= 0 ? ws[KL + (tot + 1)]?.f : null;
+  const totRows = totF && /,/.test(totF) ? new Set(rowsInFormula(totF, KL) || []) : null;
   // Có thể có 2 dòng TỔNG liền nhau (file D5) → dữ liệu bắt đầu sau dòng TỔNG cuối
   let start = tot >= 0 ? tot + 1 : hdr + 2;
   while (start < rows.length && (rows[start] || []).some((c) => /^T[ỔO]NG C[ỘO]NG/i.test(s(c)))) start++;
@@ -76,19 +120,23 @@ export function parsePLSheet(XLSX, ws, sheetName) {
       if (!t || /^Đơn vị tính/i.test(t) || /^T[ỔO]NG/i.test(t)) continue;
       const cell = ws[KL + (i + 1)];
       g = { ten: t, row: i + 1, klFile: isNum(r[kc]) ? r[kc] : null, include: rowsInFormula(cell?.f, KL), klDoc: 0, n: 0 };
+      // Dòng phường (khuôn 21-09) mang Gói + CSKV → vị trí bên dưới thiếu thì lấy theo phường (không lấy cột C: còn tên cũ)
+      for (const x of r.slice(1)) { const tx = s(x); if (/^G[óo]i\s*\d+$/i.test(tx)) g.goi = maGoiLocal(tx); else if (chuanCSKV(tx) || /^CS\s/i.test(tx)) g.donVi = chuanCSKV(tx) || tx; }
       groups.push(g);
       continue;
     }
     const v = readRow(r, cols, kc);
     v.row = i + 1; v.hidden = hidden.has(i); v.nhom = g ? g.ten : '';
-    const inRange = !g || !g.include || g.include.includes(i + 1);
+    if (g && !v.goi && g.goi) v.goi = g.goi;
+    if (g && !v.donVi && g.donVi) v.donVi = g.donVi;
+    const inRange = !g || !g.include || g.include.includes(i + 1) || !!totRows?.has(i + 1);
     if (!inRange) { ngoai.push(v); continue; }
     if (!isNum(v.kl)) { klTrong.push(v); continue; }
     viTri.push(v);
     if (g) { g.klDoc += v.kl; g.n++; }
   }
   // Nhóm không có số ở cột KL (vd PL II nhóm để trống) → coi số file = số đọc để không báo lệch giả
-  for (const gg of groups) { if (gg.klFile === null) gg.klFile = gg.klDoc; delete gg.include; }
+  for (const gg of groups) { if (gg.klFile === null) gg.klFile = gg.klDoc; delete gg.include; delete gg.goi; delete gg.donVi; }
   const tongDoc = viTri.reduce((a, v) => a + v.kl, 0);
   return {
     sheet: sheetName, loai: det.loai, tieuDe, congVan, klCol: KL, tongFile,
@@ -102,7 +150,8 @@ function readRow(r, cols, kc) {
   const v = {};
   for (const [field, L] of Object.entries(cols)) {
     const x = r[colIdx(L)];
-    v[field] = field === 'kl' ? (isNum(r[kc]) ? r[kc] : (s(r[kc]) && !isNaN(+s(r[kc])) ? +s(r[kc]) : null)) : x === null ? '' : x;
+    v[field] = field === 'kl' ? (isNum(r[kc]) ? r[kc] : (s(r[kc]) && !isNaN(+s(r[kc])) ? +s(r[kc]) : null))
+      : field === 'kl2' ? (isNum(x) ? x : (s(x) && !isNaN(+s(x)) ? +s(x) : null)) : x === null ? '' : x;
   }
   v.stt = isNum(v.stt) ? v.stt : +s(v.stt);
   for (const k of ['tram', 'phuong', 'tuyen', 'ghiChu']) if (k in v) v[k] = s(v[k]);
@@ -114,6 +163,7 @@ function readRow(r, cols, kc) {
     if (textCols.has(j)) return; // không dò gói/đơn vị trong tên trạm, tuyến…
     const t = s(x);
     if (/^G[óo]i\s*\d+$/i.test(t)) v.goi = maGoiLocal(t);
+    else if (chuanCSKV(t)) v.donVi = chuanCSKV(t);
     else if (/^(CS\s|L[ữu] Gia)/i.test(t)) v.donVi = t;
     else if (/^Đợt\s*\d+/i.test(t)) v.dot = t;
     else if (j > last && isNum(x) && x >= 100000 && v.donGia === null) v.donGia = x;
@@ -141,7 +191,9 @@ function captureHeader(ws, hdr, tot) {
 
 /** Đọc mọi sheet phụ lục trong một file. */
 export function parsePLWorkbook(XLSX, wb) {
-  return wb.SheetNames.map((n) => parsePLSheet(XLSX, wb.Sheets[n], n)).filter(Boolean);
+  // Sheet ẩn: vẫn đọc (file D5 để PL II–IV ở sheet ẩn) nhưng gắn cờ `an` → màn xem trước mặc định bỏ chọn
+  const an = new Set((wb.Workbook?.Sheets || []).map((x, i) => (x?.Hidden ? wb.SheetNames[i] : null)).filter(Boolean));
+  return wb.SheetNames.map((n) => { const r = parsePLSheet(XLSX, wb.Sheets[n], n); if (r && an.has(n)) r.an = true; return r; }).filter(Boolean);
 }
 
 const keyOf = (v) => [v.tram, v.phuong, v.tuyen].map((x) => s(x).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/gi, 'd').toLowerCase().replace(/\s+/g, ' ')).join('|');

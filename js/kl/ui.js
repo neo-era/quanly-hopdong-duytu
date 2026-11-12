@@ -2,6 +2,7 @@
 // Tab Vị trí: dạng sổ phụ lục (PA 1). Tab Đối chiếu: bàn đối chiếu theo mã HM (PA 2). + Mẫu HM, Phụ lục đã nhập.
 import * as K from './core.js';
 import { PL_TEMPLATES } from './templates.js';
+import { tplCua } from './templates2.js';
 import { NHOM_HM } from './parse.js';
 import * as KS from './ks.js';
 import { moKS } from './ksui.js';
@@ -11,11 +12,12 @@ const fmt = (n, d = 2) => (n === null || n === undefined || n === '' ? '—' : (
 const tien = (n) => { const a = Math.abs(n || 0); return a >= 1e9 ? fmt(n / 1e9, 2) + ' tỷ' : a >= 1e6 ? fmt(n / 1e6, 1) + ' tr' : fmt(n, 0); };
 const goiTen = (g) => (g ? 'Gói ' + g.replace(/^G/, '') : '—');
 /** Tên phụ lục kèm đánh dấu nháp (đề xuất lấy từ app Khảo sát). */
-const tenPL = (p) => (K.LOAI_TEN[p?.loai] || p?.loai || '') + (p?.nhap ? ' · nháp KS' : p?.nguon === 'KS' ? ' · từ KS' : '');
+const tenPL = (p) => (K.kenhPL(p) === 'TT' ? 'KL TT · ' : '') + KS.tenDich(p?.loai) + (p?.nhap ? ' · nháp KS' : p?.nguon === 'KS' ? ' · từ KS' : '');
 /** ĐVT phụ lục; nhóm Khác lấy theo loại khảo sát. */
-const dvtPL = (loai, v) => PL_TEMPLATES[loai]?.dvt || KS.KS_MAP[v?.nguon?.type]?.dvt || '';
+const dvtPL = (loai, v) => (loai && !/^KS:|^KHAC$/.test(loai) ? tplCua(loai, KS.KS_MAP)?.dvt : '') || KS.KS_MAP[v?.nguon?.type]?.dvt || '';
 const tenMau = (L) => K.LOAI_TEN[L] || ('Khác · ' + (KS.KS_MAP[L.slice(3)]?.ten || L));
-const dvtMau = (L) => PL_TEMPLATES[L]?.dvt || KS.KS_MAP[L.slice(3)]?.dvt || 'đv';
+const dvtMau = (L) => (/^KS:/.test(L) ? '' : tplCua(L, KS.KS_MAP)?.dvt) || KS.KS_MAP[L.slice(3)]?.dvt || 'đv';
+const MAU_PL = ['HANGAM', 'PLI', 'PLII', 'PLIII', 'HPS_AN', 'MYTHUAT', 'PLIV', 'TANGCUONG', 'CAPNGAM'];
 const thangNay = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
 const thangTen = (t) => (t ? esc(String(t).replace(/^(\d{4})-(\d{2})$/, 'T$2/$1')) : '');
 const PAGE = 400;
@@ -102,7 +104,9 @@ function renderViTri(el) {
   const chips = (v) => (v.chiTiet || []).length
     ? `<div class="kl-hm">${v.chiTiet.map((c) => `<span class="kl-chip ${S.catalog[c.ma] ? '' : 'bad'}" title="${esc(S.catalog[c.ma]?.ten || 'Không có trong danh mục HĐ')}">${esc(c.ma)} ×${fmt(c.kl)}</span>`).join('')}</div>`
     : '<span class="pill red mini">Chưa gắn HM</span>';
-  const ksTag = (v) => (v.nguon?.ks ? ` <span class="ks-pill ${v.nguon.xoa ? 'bad' : 'dup'}" title="Lấy từ app Khảo sát ${esc(v.nguon.ks)}">${v.nguon.xoa ? 'KS đã xoá' : 'KS'}${v.nguon.ks && !v.nguon.thuocSo && plOf.get(v.plId)?.loai !== 'KHAC' ? ' · chưa xác nhận Sở' : ''}</span>` : '')
+  const ksTag = (v) => (v.nguon?.ks ? ` <span class="ks-pill ${v.nguon.xoa ? 'bad' : 'dup'}" title="Lấy từ app Khảo sát ${esc(v.nguon.ks)}">${v.nguon.xoa ? 'KS đã xoá' : 'KS'}${v.nguon.ks && !v.nguon.thuocSo && K.kenhPL(plOf.get(v.plId)) === 'TS' && !/^KS:|^KHAC$/.test(plOf.get(v.plId)?.loai || '') ? ' · chưa xác nhận Sở' : ''}</span>` : '')
+    + (v.nguon?.ks ? ` <span class="ks-pill ${K.kenhPL(plOf.get(v.plId)) === 'TT' ? 'chg' : 'new'}" title="${v.kenhTay ? 'Văn phòng đặt' : 'Người khảo sát chọn'}">${K.kenhPL(plOf.get(v.plId)) === 'TT' ? 'KL TT' : 'Trình Sở'}${v.kenhTay ? ' · VP đặt' : ''}</span>` : '')
+    + (v.nguon?.doiTrinhSo ? ` <span class="ks-pill bad" title="Người khảo sát đổi kênh sau khi vị trí đã vào đợt / đã thực hiện / văn phòng đã đặt">KS đổi ${v.nguon.doiTrinhSo.tu === 'TT' ? 'KL TT' : 'Trình Sở'} → ${v.nguon.doiTrinhSo.sang === 'TT' ? 'KL TT' : 'Trình Sở'}</span>` : '')
     + (v.kl === null || v.kl === undefined ? ' <span class="ks-pill bad">Thiếu KL</span>' : '') + (v.nguon?.doiSauTH ? ' <span class="ks-pill chg">KS đổi sau khi TH</span>' : '') + (v.nguon?.doiMa ? ' <span class="ks-pill chg" title="Người khảo sát đổi mã HĐ sau khi chi tiết đã sửa tay — giữ chi tiết sửa tay">KS đổi mã</span>' : '') + (v.goiKS ? ' <span class="ks-pill chg">Gói KS chọn</span>' : '') + (v.lechGoi ? ' <span class="ks-pill bad">Lệch gói</span>' : '') + (v.goiY && !v.goiY.chac ? ` <span class="ks-pill chg" title="${esc(v.goiY.ly)}">mã ${esc(v.goiY.ma)} cần xem lại</span>` : '');
   const stt = (v) => v.trangThai === 'da' ? `<span class="pill grn mini">Đã TH${v.thangNT ? ' · ' + thangTen(v.thangNT) : ''}</span>` : v.trangThai === 'dang' ? '<span class="pill org mini">Đang làm</span>' : '<span class="pill mut mini">Chưa làm</span>';
 
@@ -159,6 +163,7 @@ function renderViTri(el) {
         <div class="kl-sbar-acts">
           <button class="btn ghost sm" data-kl="boChon">Bỏ chọn</button>
           ${selVT.some((v) => v.nguon?.ks) ? `<button class="btn ghost sm" data-kl="ksSo">Xác nhận thuộc Sở</button><button class="btn ghost sm" data-kl="ksGoi">Gán gói</button>` : ''}
+          ${selVT.some((v) => v.nguon?.ks && plOf.get(v.plId)?.nhap) ? '<button class="btn ghost sm" data-kl="ksTS">Đặt Trình Sở</button><button class="btn ghost sm" data-kl="ksTT">Đặt KL Trung tâm</button>' : ''}
           ${selVT.some((v) => plOf.get(v.plId)?.nhap) ? '<button class="btn ghost sm" data-kl="ksChuyen">Chuyển nháp → đợt phụ lục</button>' : ''}
           <button class="btn ghost sm" data-kl="ganMau">Gắn mẫu HM</button>
           <button class="btn ghost sm" data-kl="boTH">Đặt lại "Chưa làm"</button>
@@ -278,8 +283,8 @@ function renderMau(el) {
   const rows = S.mau[L] || [];
   const names = Object.entries(S.catalog);
   el.innerHTML = `<div class="kl-pad">
-    <div class="kl-seg">${Object.keys(PL_TEMPLATES).map((k) => `<button class="${k === L ? 'on' : ''}" data-mau="${k}">${esc(K.LOAI_TEN[k])}</button>`).join('')}</div>
-    <div class="kl-seg ks-seg" aria-label="Mẫu nhóm Khác (lấy từ app Khảo sát)">${Object.entries(KS.KS_MAP).filter(([, M]) => M.dich === 'KHAC').map(([k, M]) => `<button class="${'KS:' + k === L ? 'on' : ''}" data-mau="KS:${k}">Khác · ${esc(M.ten)}</button>`).join('')}</div>
+    <div class="kl-seg">${MAU_PL.map((k) => `<button class="${k === L ? 'on' : ''}" data-mau="${k}">${esc(K.LOAI_TEN[k])}</button>`).join('')}</div>
+    <div class="kl-seg ks-seg" aria-label="Mẫu khuôn chung (lấy từ app Khảo sát)">${Object.entries(KS.KS_MAP).filter(([, M]) => /^KS:/.test(M.dich)).map(([k, M]) => `<button class="${'KS:' + k === L ? 'on' : ''}" data-mau="KS:${k}">Khác · ${esc(M.ten)}</button>`).join('')}</div>
     <p class="muted">1 ${esc(dvtMau(L))} ở ${esc(tenMau(L))} gồm những mã HM nào, mỗi mã bao nhiêu. Khi nhập phụ lục hoặc bấm "Gắn mẫu HM", app điền sẵn chi tiết = KL vị trí × hệ số; vị trí đã sửa tay được giữ nguyên.</p>
     <datalist id="klHM">${names.slice(0, 2500).map(([m, it]) => `<option value="${esc(m)}">${esc(it.ten)}</option>`).join('')}</datalist>
     <div class="tablewrap"><table class="kl-tb"><thead><tr><th>Mã HM</th><th>Hạng mục (theo bảng giá HĐ)</th><th>ĐVT</th><th class="r">Hệ số / 1 ${esc(dvtMau(L))}</th><th></th></tr></thead><tbody>
@@ -395,6 +400,14 @@ async function onClick(e) {
       api.toast(`Đã xác nhận ${n} vị trí thuộc Sở quản lý.`, 'ok'); return rerender();
     }
     case 'ksGoi': return ksGanGoi();
+    case 'ksTS': case 'ksTT': {
+      const kenh = t.dataset.kl === 'ksTT' ? 'TT' : 'TS';
+      const ids = [...ui.sel].filter((id) => S.viTri.find((v) => v.id === id)?.nguon?.ks);
+      let kq = { doi: 0, boQua: [] };
+      await api.mutate(() => (kq = KS.datKenh(S, ids, kenh)));
+      api.toast(`Đã đặt ${kenh === 'TT' ? 'KL Trung tâm' : 'Trình Sở'} cho ${kq.doi} vị trí${kq.boQua.length ? ` · ${kq.boQua.length} không đổi được (${[...new Set(kq.boQua.map((b) => b.lyDo))].join('; ')})` : ''}.`, kq.boQua.length ? 'err' : 'ok');
+      return rerender();
+    }
     case 'ksChuyen': return ksChuyen();
     case 'more': ui.limit += PAGE; return rerender();
     case 'boChon': ui.sel.clear(); return rerender();
@@ -730,7 +743,7 @@ async function nhapPhuLuc() {
   pg.close();
   const S = st();
   const items = [];
-  for (const f of all) for (const r of f.sheets) items.push({ f, r, con: f.sub[r.sheet], chon: !f.sub[r.sheet] && !r.loi && r.viTri.length > 0 });
+  for (const f of all) for (const r of f.sheets) items.push({ f, r, con: f.sub[r.sheet], chon: !f.sub[r.sheet] && !r.loi && !r.an && r.viTri.length > 0 });
   if (!items.length) return api.toast('Không thấy sheet phụ lục nào (dòng đầu phải là "Phụ lục I/II/III/IV").', 'err');
   const nam = new Date().getFullYear();
   // Cảnh báo trùng nội dung: so khoá trạm|phường|tuyến với phụ lục cùng loại đã có và với sheet đã chọn phía trên
@@ -756,7 +769,7 @@ async function nhapPhuLuc() {
     const thieuGoi = r.viTri.filter((v) => !v.goi).length;
     const trung = S.phuLuc.find((p) => p.file === it.f.file && p.sheet === r.sheet && p.loai === r.loai);
     return `<div class="kl-imp ${khop ? '' : 'bad'}">
-      <label class="kl-imph"><input type="checkbox" data-ic="${i}" ${it.chon ? 'checked' : ''}> <b>${esc(K.LOAI_TEN[r.loai])}</b> <span class="kl-sub">${esc(it.f.file)} › ${esc(r.sheet)}</span></label>
+      <label class="kl-imph"><input type="checkbox" data-ic="${i}" ${it.chon ? 'checked' : ''}> <b>${esc(KS.tenDich(r.loai))}</b>${r.an ? ' <span class="pill mut mini">sheet ẩn</span>' : ''} <span class="kl-sub">${esc(it.f.file)} › ${esc(r.sheet)}</span></label>
       <div class="kl-impn">
         <span>${fmt(r.viTri.length, 0)} vị trí · ${fmt(r.groups.length, 0)} phường</span>
         <span>Đọc được <b class="n">${fmt(r.checks.tongDoc)}</b> · TỔNG CỘNG của file <b class="n">${fmt(r.tongFile)}</b> ${khop ? '<span class="pill grn mini">✓ khớp</span>' : '<span class="pill red mini">✗ lệch</span>'}</span>
@@ -776,6 +789,7 @@ async function nhapPhuLuc() {
         <label class="fld"><span>Đợt</span><input class="kl-in" data-io="dot" data-i="${i}" value="${esc(trung ? trung.dot : [...new Set(r.viTri.map((v) => v.dot).filter(Boolean))][0] || '')}" placeholder="vd Đợt 2"></label>
         <label class="fld"><span>Nhóm vốn</span><input class="kl-in" data-io="nhomVon" data-i="${i}" value="${esc(trung?.nhomVon || '')}" placeholder="vd BSV (Đợt 2)-Nhóm 5"></label>
         <label class="fld"><span>Năm kế hoạch</span><input class="kl-in" type="number" data-io="namKH" data-i="${i}" value="${trung?.namKH || nam}"></label>
+        <label class="fld"><span>Kênh</span><select data-io="kenh" data-i="${i}"><option value="TS">Phụ lục trình Sở</option><option value="TT" ${/thẩm quyền trung tâm|không trình sở|^biểu tt/i.test((r.tieuDe || '') + ' ' + (r.title || '')) ? 'selected' : ''}>KL Trung tâm (không trình Sở)</option></select></label>
         ${thieuGoi ? `<label class="fld"><span>${fmt(thieuGoi, 0)} vị trí chưa có gói — gán</span><select data-io="goiMacDinh" data-i="${i}"><option value="">Để trống (tự gán sau)</option>${goiList(S).map((g) => `<option value="${g}">${goiTen(g)}</option>`).join('')}</select></label>` : ''}
       </div></div>`;
   }).join('');
@@ -921,7 +935,9 @@ function openViTri(id) {
       <label class="fld"><span>Trạng thái</span><select data-vs>${[['chua', 'Chưa làm'], ['dang', 'Đang làm'], ['da', 'Đã thực hiện']].map(([k, t]) => `<option value="${k}" ${v.trangThai === k ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
       <label class="fld"><span>Tháng nghiệm thu</span><input type="month" data-vm value="${esc(v.thangNT || '')}"></label>
       ${v.nguon?.ks ? `<label class="fld"><span>KL vị trí (${esc(dvtPL(pl?.loai, v))})${pl?.loai === 'PLII' ? ' — cột J' : ''}</span><input class="kl-in n" type="number" step="any" min="0" data-vkl value="${v.kl ?? ''}" placeholder="trống"></label>
-      ${pl?.loai !== 'KHAC' ? `<label class="kl-chk ks-44"><input type="checkbox" data-vso ${v.nguon.thuocSo ? 'checked' : ''}> Thuộc tuyến Sở quản lý</label>` : ''}` : ''}</div>
+      ${K.kenhPL(pl) === 'TS' && !/^KS:|^KHAC$/.test(pl?.loai || '') ? `<label class="kl-chk ks-44"><input type="checkbox" data-vso ${v.nguon.thuocSo ? 'checked' : ''}> Thuộc tuyến Sở quản lý</label>` : ''}
+      ${pl?.nhap ? `<label class="fld"><span>Kênh${v.kenhTay ? ' (văn phòng đặt)' : ' (người khảo sát chọn)'}</span><select data-vkenh><option value="TS" ${K.kenhPL(pl) === 'TS' ? 'selected' : ''}>Trình Sở — phụ lục trình Sở</option><option value="TT" ${K.kenhPL(pl) === 'TT' ? 'selected' : ''}>Không trình Sở — KL Trung tâm</option></select></label>` : ''}
+      <label class="fld"><span>KL ngoài kế hoạch (cột X)</span><select data-vnk><option value="" ${v.ngoaiKHTay === undefined ? 'selected' : ''}>Tự động (${K.ngoaiKHCua(S, pl).get(v.id) || 'trống'})</option><option value="1" ${v.ngoaiKHTay === true ? 'selected' : ''}>Đánh X</option><option value="0" ${v.ngoaiKHTay === false ? 'selected' : ''}>Không đánh</option></select></label>` : ''}</div>
     <div class="sheet-f"><button class="btn ghost" data-x>Huỷ</button><button class="btn amber" data-ap>Lưu</button></div>`, {
     wide: true,
     onMount: (el, close) => {
@@ -948,6 +964,10 @@ function openViTri(id) {
           if (klIn && String(v.kl ?? '') !== klIn.value) KS.suaKL(S, v.id, klIn.value);
           const so = el.querySelector('[data-vso]');
           if (so) KS.xacNhanThuocSo(S, [v.id], so.checked);
+          const kn = el.querySelector('[data-vkenh]');
+          if (kn && kn.value !== K.kenhPL(pl)) KS.datKenh(S, [v.id], kn.value);
+          const nk = el.querySelector('[data-vnk]');
+          if (nk) K.datNgoaiKH(S, v.id, nk.value === '' ? null : nk.value === '1');
           v.trangThai = trangThai;
           v.thangNT = trangThai === 'da' ? el.querySelector('[data-vm]').value || thangNay() : '';
           const custom = cur.filter((c) => c.th !== '' && +c.th !== c.kl);
@@ -974,7 +994,9 @@ function loadExcelJS() {
 async function xuatExcel() {
   const S = st();
   openModal('Xuất Excel trình Sở', `<p class="muted">Mỗi phụ lục 1 sheet đúng form gốc (tiêu đề, cột, nhóm phường, dòng cộng SUBTOTAL), kèm sheet TongHop, ChiTiet_HM và DoiChieu_HM — mọi số tổng là công thức sống.</p>
-    ${S.phuLuc.some((p) => p.nhap || p.loai === 'KHAC') ? '<p class="muted">Phụ lục nháp (đề xuất từ khảo sát) và nhóm "Khác" không xuất — chuyển nháp sang đợt phụ lục ở tab Vị trí.</p>' : ''}
+    ${S.phuLuc.some((p) => p.nhap || p.loai === 'KHAC') ? '<p class="muted">Phụ lục nháp (đề xuất từ khảo sát) và nhóm "Khác" cũ không xuất — chuyển nháp sang đợt phụ lục ở tab Vị trí.</p>' : ''}
+    <p class="muted">Phụ lục trình Sở đánh số La Mã theo thứ tự mẫu (Hạ ngầm, Thay sửa tủ, HPS→LED, Thay trụ…). KL Trung tâm xuất thành Biểu TT-01, TT-02… kèm sheet TongHop_TT theo gói × mã HM.</p>
+    <label class="fld"><span>Xuất theo gói</span><select data-xg><option value="">Tất cả gói</option>${goiList(S).map((g) => `<option value="${g}">${goiTen(g)}</option>`).join('')}</select></label>
     ${S.phuLuc.filter((p) => !p.nhap && p.loai !== 'KHAC').map((p) => `<label class="kl-chk"><input type="checkbox" data-xp="${p.id}" checked> ${esc(tenPL(p))} — ${esc(p.sheet)}${p.dot ? ' · ' + esc(p.dot) : ''} <span class="kl-sub">(${fmt(S.viTri.filter((v) => v.plId === p.id).length, 0)} vị trí)</span></label>`).join('')}
     <div class="sheet-f"><button class="btn ghost" data-x>Huỷ</button><button class="btn amber" data-ap>⇪ Tải file .xlsx</button></div>`, {
     onMount: (el, close) => { el.querySelector('[data-ap]').onclick = async (e) => {
@@ -985,12 +1007,13 @@ async function xuatExcel() {
       e.target.disabled = true; e.target.textContent = 'Đang lập file…';
       try {
         const [EJ, { buildWorkbook }] = await Promise.all([loadExcelJS(), import('./export.js')]);
-        const wb = buildWorkbook(EJ, S, { templates: PL_TEMPLATES, phuLucIds: ids });
+        const goiX = el.querySelector('[data-xg]').value;
+        const wb = buildWorkbook(EJ, S, { templates: PL_TEMPLATES, phuLucIds: ids, goi: goiX || undefined });
         const buf = await wb.xlsx.writeBuffer();
         const a = document.createElement('a');
         a.href = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
         const dot = [...new Set(ids.map((id) => S.phuLuc.find((p) => p.id === id).dot).filter(Boolean))].join('-').replace(/\s+/g, '');
-        a.download = `PhuLuc_TrinhSo${dot ? '_' + dot : ''}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+        a.download = `PhuLuc_TrinhSo${dot ? '_' + dot : ''}${goiX ? '_' + goiX : ''}_${new Date().toISOString().slice(0, 10)}.xlsx`;
         document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
         close(); api.toast('Đã xuất file Excel.', 'ok');
       } catch (err) { e.target.disabled = false; e.target.textContent = '⇪ Tải file .xlsx'; api.toast('Xuất thất bại: ' + err.message, 'err'); }
@@ -1016,7 +1039,7 @@ function ksChuyen() {
   const S = st();
   const ids = [...ui.sel];
   const dots = [...new Set(S.phuLuc.filter((p) => !p.nhap && p.dot).map((p) => p.dot))];
-  openModal('Chuyển nháp → đợt phụ lục', `<p>Chỉ chuyển vị trí <b>có KL</b>, <b>đã có gói</b> và <b>đã xác nhận thuộc Sở</b> (nhóm Khác không cần). Sau khi chuyển, KL mới cộng vào "Đã vào KH".</p>
+  openModal('Chuyển nháp → đợt phụ lục', `<p>Chỉ chuyển vị trí <b>có KL</b>, <b>đã có gói</b>; phụ lục trình Sở cần thêm <b>đã xác nhận thuộc Sở</b> (KL Trung tâm và khuôn chung không cần). Mỗi kênh vào phụ lục riêng. Sau khi chuyển, KL mới cộng vào "Đã vào KH".</p>
     <label class="fld"><span>Đợt</span><input class="kl-in" list="ksDot" data-dot placeholder="vd Đợt 3"><datalist id="ksDot">${dots.map((d) => `<option value="${esc(d)}">`).join('')}</datalist></label>
     <label class="fld"><span>Nhóm vốn</span><input class="kl-in" data-nv></label>
     <div class="sheet-f"><button class="btn ghost" data-x>Huỷ</button><button class="btn amber" data-ap>Chuyển</button></div>`, {

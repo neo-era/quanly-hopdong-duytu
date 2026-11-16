@@ -467,3 +467,36 @@ span.ks-gcb{display:inline-block}
 .lq-dem{margin-right:auto;align-self:center}
 .sheet-b{padding-bottom:calc(16px + env(safe-area-inset-bottom))}
 @media (orientation:landscape) and (max-height:520px){ .lq-h span{display:none} .lq-bar{position:static;padding:2px 0 4px} .lq-tools input[type=search]{min-height:40px} }
+/* Chép bộ HM (docs/07) */
+.cb-h{font-size:13px;margin:14px 0 6px;color:var(--ink2)}
+.cb-src{display:flex;flex-direction:column;gap:6px;max-height:34vh;overflow:auto;margin-top:8px}
+.cb-it{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:12px;padding:10px 12px;min-height:44px;cursor:pointer}
+.cb-it.on{border-color:var(--amber,#d97706);background:color-mix(in srgb,var(--amber,#d97706) 8%,transparent)}
+.cb-it input{margin-top:3px;width:18px;height:18px;flex:none}
+.cb-it>span{display:flex;flex-direction:column;gap:2px;min-width:0}
+.cb-ma{font:12px/1.4 ui-monospace,monospace;color:var(--muted);overflow-wrap:anywhere}
+.cb-seg{display:flex;gap:8px;flex-wrap:wrap}
+.cb-seg label{flex:1 1 160px;display:flex;gap:8px;align-items:center;border:1px solid var(--line);border-radius:12px;padding:10px 12px;min-height:44px;cursor:pointer}
+.cb-seg label.on{border-color:var(--amber,#d97706)}
+.cb-dich{display:flex;flex-direction:column;gap:8px}
+.cb-row{border:1px solid var(--line);border-radius:12px;padding:8px 12px}
+.cb-row.off{border-style:dashed}.cb-row.off .cb-ten,.cb-row.off .cb-top>.kl-sub{opacity:.6}
+.cb-top{display:flex;gap:8px;align-items:center;flex-wrap:wrap;min-height:44px;cursor:pointer}
+.cb-top input{width:18px;height:18px}
+.cb-diff{display:flex;flex-wrap:wrap;gap:4px;margin:4px 0 2px 26px}
+.cb-add{color:var(--grn);border-color:color-mix(in srgb,var(--grn) 45%,transparent)}
+.cb-del{color:var(--red);border-color:color-mix(in srgb,var(--red) 45%,transparent);text-decoration:line-through}
+.cb-chg{color:color-mix(in srgb,var(--yel) 80%,var(--ink));border-color:color-mix(in srgb,var(--yel) 45%,transparent)}
+.cb-keep{color:var(--muted)}
+.cb-warn{margin:4px 0 2px 26px;padding-left:16px;font-size:12.5px;color:color-mix(in srgb,var(--yel) 80%,var(--ink))}
+.cb-warn .khacLoai,.cb-warn .daTH,.cb-warn .ngoaiGoi,.cb-warn .khongDM{color:var(--red)}
+.cb-warn .tiLe,.cb-warn .doiCG{color:var(--muted)}
+.cb-key{margin-top:6px}
+.cb-tong{border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-top:10px;font-size:13.5px}
+.cb-tong details{margin-top:6px}.cb-tong summary{cursor:pointer;min-height:32px;display:flex;align-items:center}
+.cb-tong table{margin-top:6px}
+.cb-red{color:var(--red);font-weight:600}
+.cb-vuot td{color:var(--red);font-weight:600}
+.cb-warn .dangTH,.cb-warn .giuTH{color:var(--red)}
+
+@media (max-height:500px){.cb-src{max-height:none;overflow:visible}}

@@ -492,3 +492,10 @@ span.ks-gcb{display:inline-block}
 .cb-warn .khacLoai,.cb-warn .daTH,.cb-warn .ngoaiGoi,.cb-warn .khongDM{color:var(--red)}
 .cb-warn .tiLe,.cb-warn .doiCG{color:var(--muted)}
 .cb-key{margin-top:6px}
+.cb-tong{border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-top:10px;font-size:13.5px}
+.cb-tong details{margin-top:6px}.cb-tong summary{cursor:pointer;min-height:32px;display:flex;align-items:center}
+.cb-tong table{margin-top:6px}
+.cb-red{color:var(--red);font-weight:600}
+.cb-vuot td{color:var(--red);font-weight:600}
+.cb-warn .dangTH,.cb-warn .giuTH{color:var(--red)}
+.cb-warn .thang,.cb-warn .khacGoi,.cb-warn .khacDV,.cb-warn .khacNam,.cb-warn .khacNamLD,.cb-warn .nhieuGoi,.cb-warn .thieuCG,.cb-warn .trungCap{color:var(--yel)}

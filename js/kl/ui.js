@@ -422,8 +422,13 @@ async function onClick(e) {
     case 'hoanTacChep': {
       const h = ui.hoanTacChep; if (!h) return;
       const map = new Map(h.ds.map((x) => [x.id, x]));
-      await api.mutate(() => { for (const v of S.viTri) { const o = map.get(v.id); if (o) { v.chiTiet = o.chiTiet; v.chiTietSua = o.chiTietSua; } } });
-      ui.hoanTacChep = null; api.toast(`Đã hoàn tác — trả lại chi tiết HM cho ${map.size} vị trí.`, 'ok'); return rerender();
+      // Vị trí đã sửa tiếp sau khi chép → không đè mất phần sửa đó
+      const daSua = S.viTri.filter((v) => map.has(v.id) && h.sau?.get(v.id) !== JSON.stringify(K.gopMa(v.chiTiet || [])));
+      const boQua = new Set(daSua.map((v) => v.id));
+      if (daSua.length && !(await confirmBox(`${daSua.length} vị trí đã được sửa tiếp sau khi chép (${daSua.slice(0, 3).map((v) => v.tram).join(', ')}${daSua.length > 3 ? '…' : ''}) — giữ phần sửa đó, chỉ hoàn tác ${map.size - daSua.length} vị trí còn lại?`, 'Hoàn tác phần còn lại'))) return;
+      let n = 0;
+      await api.mutate(() => { for (const v of S.viTri) { const o = map.get(v.id); if (o && !boQua.has(v.id)) { v.chiTiet = o.chiTiet; v.chiTietSua = o.chiTietSua; n++; } } });
+      ui.hoanTacChep = null; api.toast(`Đã hoàn tác — trả lại chi tiết HM cho ${n} vị trí${boQua.size ? ` · giữ ${boQua.size} vị trí đã sửa tiếp` : ''}.`, 'ok'); return rerender();
     }
     case 'mauPick': {
       const host = document.querySelector('[data-mpicker]'); if (!host) return;
@@ -904,15 +909,21 @@ function chepBo() {
   const dichDs = () => chon.filter((v) => v.id !== s.nguon);
   openModal('Chép bộ HM từ vị trí hoàn chỉnh', `<div data-cb></div>`, { wide: true, onMount: (el, close) => {
     const host = el.querySelector('[data-cb]');
-    const nhan = { khacLoai: 'Khác loại', daTH: 'Đã thực hiện' };
+    const nhan = { khacLoai: 'Khác loại', daTH: 'Đã thực hiện', dangTH: 'Đang thực hiện' };
+    const plOf = new Map(S.phuLuc.map((p) => [p.id, p]));
+    const opt = () => ({ cheDo: s.cheDo, dvtVT: (v) => dvtPL(plOf.get(v.plId)?.loai, v) });
     const ve = () => {
       const ds = dichDs();
       const nguon = S.viTri.find((v) => v.id === s.nguon);
       const gy = LQ.goiYNguon(S, chon, { q: s.q, boQua: [] });   // vị trí đang chọn đã có HM cũng làm nguồn được
       if (nguon && !gy.some((x) => x.v.id === nguon.id)) gy.unshift({ v: nguon });
-      const kq = nguon ? ds.map((d) => ({ d, r: LQ.chepBoHM(S, nguon, d, { cheDo: s.cheDo }) })) : [];
+      const kq = nguon ? ds.map((d) => ({ d, r: LQ.chepBoHM(S, nguon, d, opt()) })) : [];
       for (const { d, r } of kq) if ((r.chan || (d.chiTiet || []).length) && !s.bo.has('!' + d.id)) s.bo.add(d.id);   // khác loại / đã TH / đã có HM: mặc định không chép — xem khác biệt rồi tự tick
       const lam = kq.filter(({ d, r }) => !s.bo.has(d.id) && !r.giongHet);
+      const td = LQ.tacDongHD(S, lam.map(({ d, r }) => ({ d, chiTiet: r.chiTiet })), K.doiChieu);
+      const vuot = td.filter((x) => x.vuot);
+      const nGhiDe = lam.filter(({ d }) => (d.chiTiet || []).length).length, nDo = lam.filter(({ r }) => r.chan || r.canhBao.some((c) => /^(ngoaiGoi|khongDM)$/.test(c.loai))).length;
+      s.vuot = vuot; s.nGhiDe = nGhiDe;
       const coCu = ds.some((d) => (d.chiTiet || []).length);
       const ma = (ds2, cls, dau) => ds2.map((m) => `<span class="kl-chip cb-${cls}">${dau}${esc(typeof m === 'string' ? m : `${m.ma} ${fmt(m.tu)}→${fmt(m.sang)}`)}</span>`).join('');
       host.innerHTML = `
@@ -937,17 +948,22 @@ function chepBo() {
             ${cb.length ? `<ul class="cb-warn">${cb.map((c) => `<li class="${c.loai}">${esc(c.text)}</li>`).join('')}</ul>` : ''}</div>`;
         }).join('')}</div>
         <p class="kl-sub cb-key">+ thêm · − bỏ · = giữ · ~ đổi KL</p>` : '<p class="kl-sub">Chọn 1 vị trí nguồn ở trên.</p>'}
+        ${lam.length ? `<div class="cb-tong" role="status"><b>Sẽ chép ${fmt(lam.length, 0)} vị trí</b>: ${fmt(lam.length - nGhiDe, 0)} trống · ${fmt(nGhiDe, 0)} ghi đè${nDo ? ` · <span class="cb-red">${fmt(nDo, 0)} có cảnh báo đỏ</span>` : ''}
+          ${td.length ? `<details ${vuot.length ? 'open' : ''}><summary>${vuot.length ? `<span class="cb-red">⚠ ${vuot.length} mã vượt HĐ còn lại chưa vào KH</span>` : 'KL thay đổi so với HĐ còn lại'}</summary>
+          <table class="kl-tb tight"><thead><tr><th>Mã</th><th>Gói · năm</th><th class="r">Thêm</th><th class="r">HĐ còn lại</th></tr></thead><tbody>${td.map((x) => `<tr class="${x.vuot ? 'cb-vuot' : ''}"><td class="n">${esc(x.ma)}</td><td>${esc(goiTen(x.goi))} · ${x.nam || '—'}</td><td class="r n">${x.them > 0 ? '+' : ''}${fmt(x.them)}</td><td class="r n">${fmt(x.conLai)}</td></tr>`).join('')}</tbody></table></details>` : ''}</div>` : ''}
         <div class="sheet-f"><button class="btn ghost" data-x>Huỷ</button><button class="btn amber" data-cbap ${lam.length ? '' : 'disabled'}>Chép cho ${fmt(lam.length, 0)} vị trí</button></div>`;
       host.querySelector('[data-x]').onclick = close;
       const q = host.querySelector('[data-cbq]');
       let tm = 0; q.oninput = () => { clearTimeout(tm); tm = setTimeout(() => { s.q = q.value; const p = q.selectionStart; ve(); const q2 = host.querySelector('[data-cbq]'); q2.focus(); q2.setSelectionRange(p, p); }, 200); };
       host.querySelector('[data-cbap]').onclick = async () => {
         const n = S.viTri.find((v) => v.id === s.nguon);
-        const ap = dichDs().filter((d) => !s.bo.has(d.id)).map((d) => ({ d, r: LQ.chepBoHM(S, n, d, { cheDo: s.cheDo }) })).filter((x) => !x.r.giongHet);
+        const ap = dichDs().filter((d) => !s.bo.has(d.id)).map((d) => ({ d, r: LQ.chepBoHM(S, n, d, opt()) })).filter((x) => !x.r.giongHet);
         if (!ap.length) return;
+        if (s.vuot.length && !(await confirmBox(`${s.vuot.length} mã sẽ vượt HĐ còn lại chưa vào KH (${s.vuot.slice(0, 5).map((x) => x.ma).join(', ')}${s.vuot.length > 5 ? '…' : ''}). Vẫn chép?`, 'Vẫn chép'))) return chepBo();
+        if (!s.vuot.length && s.nGhiDe > 20 && !(await confirmBox(`Sẽ ghi đè chi tiết HM của ${s.nGhiDe} vị trí đã có HM. Tiếp tục?`, 'Ghi đè'))) return chepBo();
         const ht = ap.map(({ d }) => ({ id: d.id, chiTiet: (d.chiTiet || []).map((c) => ({ ...c })), chiTietSua: d.chiTietSua }));
         await api.mutate(() => { for (const { d, r } of ap) K.suaChiTiet(S, d.id, r.chiTiet); });
-        ui.hoanTacChep = { ds: ht, luc: Date.now() };
+        ui.hoanTacChep = { ds: ht, luc: Date.now(), sau: new Map(ap.map(({ d, r }) => [d.id, JSON.stringify(K.gopMa(r.chiTiet))])) };
         close(); api.toast(`Đã chép bộ ${n.chiTiet.length} mã của ${n.tram} cho ${ap.length} vị trí — có nút Hoàn tác ở thanh trên.`, 'ok'); rerender();
       };
     };

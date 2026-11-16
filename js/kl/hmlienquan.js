@@ -131,43 +131,112 @@ function maTheoPhuong(ma, phuong, catalog) {
 }
 const r3 = (x) => Math.round(x * 1000) / 1000;
 
+/** ĐVT chuẩn hoá để so (md/mét → m; bộ đèn → bo den…). */
+const dvtChuan = (d) => fold(d).replace(/\bmd\b|\bmet\b/g, 'm').replace(/\s+/g, ' ').trim();
+const laThang = (d) => /thang/.test(fold(d));
+/** Số tháng còn lại tới hết năm kế hoạch (năm sau → 12, năm đã qua → 1) — cùng quy tắc với lienQuan. */
+export function thangConLai(namKH, now = new Date()) { const y = now.getFullYear(), n = +namKH || y; return n > y ? 12 : n < y ? 1 : 12 - now.getMonth(); }
+
 /**
- * Bộ HM chép sang 1 vị trí đích + so sánh với bộ HM đích đang có.
- * KL nhân theo tỉ lệ KL vị trí (đích/nguồn; thiếu KL → giữ nguyên). Mã đổi theo phường (Cần Giờ).
+ * Bộ HM chép sang 1 vị trí đích + so sánh với bộ HM đích đang có (docs/07).
+ * - Chỉ nhân tỉ lệ KL vị trí khi ĐVT của mã = ĐVT KL vị trí (opts.dvtVT(v)); mã đếm khác (cái, bộ…) giữ nguyên số.
+ * - Mã ĐVT tháng: đặt lại = số tháng còn lại theo năm KH của phụ lục đích.
+ * - Mã đổi theo phường (Cần Giờ). Thay: không bỏ mã đích đã có KL thực hiện.
  * @param opts.cheDo 'thay' (bộ đích = bộ nguồn) | 'gop' (giữ nguyên mã + KL của đích, chỉ thêm mã đích chưa có)
- * @returns { chiTiet, khac: { them, bo, doiKL:[{ma,tu,sang}] }, canhBao:[{loai, ma?, text}], chan: lý do không nên chép | '' , giongHet }
+ * @returns { chiTiet, khac: { them, bo, giu, doiKL:[{ma,tu,sang}] }, canhBao:[{loai, ma?, text}], chan, giongHet }
  */
-export function chepBoHM(st, nguon, dich, { cheDo = 'thay' } = {}) {
+export function chepBoHM(st, nguon, dich, { cheDo = 'thay', dvtVT = null, now = new Date() } = {}) {
   const catalog = st.catalog || {};
   const plMap = new Map((st.phuLuc || []).map((p) => [p.id, p]));
+  const plN = plMap.get(nguon?.plId), plD = plMap.get(dich?.plId);
   const canhBao = [];
+  const bao = (loai, text, ma) => canhBao.push(ma ? { loai, ma, text } : { loai, text });
   let chan = '';
-  const lN = loaiNhom(nguon, plMap.get(nguon?.plId)), lD = loaiNhom(dich, plMap.get(dich?.plId));
-  if (lN !== lD) { chan = 'khacLoai'; canhBao.push({ loai: 'khacLoai', text: 'Khác loại công tác với vị trí nguồn' }); }
-  if (dich?.trangThai === 'da') { chan = chan || 'daTH'; canhBao.push({ loai: 'daTH', text: 'Đã thực hiện — chép sẽ đổi KL kế hoạch' }); }
+  if (loaiNhom(nguon, plN) !== loaiNhom(dich, plD)) { chan = 'khacLoai'; bao('khacLoai', 'Khác loại công tác với vị trí nguồn'); }
+  const coTH = dich?.thucHien && Object.keys(dich.thucHien).length;
+  if (dich?.trangThai === 'da') { chan = chan || 'daTH'; bao('daTH', 'Đã thực hiện — chép sẽ đổi KL kế hoạch'); }
+  else if (dich?.trangThai === 'dang' || coTH) { chan = chan || 'dangTH'; bao('dangTH', 'Đang thực hiện — chép sẽ đổi KL kế hoạch'); }
+  // Khác biệt chỉ để lưu ý (không chặn)
+  if (nguon?.goi !== dich?.goi) bao('khacGoi', `Khác gói (${nguon?.goi || '—'} → ${dich?.goi || '—'})`);
+  if (dich?.goi === 'nhieu') bao('nhieuGoi', 'Vị trí nhiều gói — chưa kiểm được HĐ gói');
+  if (nguon?.donVi && dich?.donVi && nguon.donVi !== dich.donVi) bao('khacDV', `Khác đơn vị (${nguon.donVi} → ${dich.donVi})`);
+  if (+nguon?.namLD && +dich?.namLD && Math.abs(+nguon.namLD - +dich.namLD) >= 10) bao('khacNamLD', `Năm lắp đặt lệch ${Math.abs(+nguon.namLD - +dich.namLD)} năm (${nguon.namLD} → ${dich.namLD}) — bộ thay thế có thể khác`);
+  if (plN && plD && +plN.namKH !== +plD.namKH) bao('khacNam', `Khác năm KH (${plN.namKH} → ${plD.namKH})`);
+  const dvtV = dvtVT ? dvtChuan(dvtVT(dich)) : '';
   const r = +nguon?.kl > 0 && +dich?.kl > 0 ? +dich.kl / +nguon.kl : 1;
-  if (r !== 1) canhBao.push({ loai: 'tiLe', text: `KL nhân ×${r3(r)} theo KL vị trí (${r3(+dich.kl)}/${r3(+nguon.kl)})` });
+  const thang = thangConLai(plD?.namKH, now);
   const moi = new Map();
+  let nhan = 0;
   for (const c of nguon?.chiTiet || []) {
     const ma = maTheoPhuong(c.ma, dich?.phuong, catalog);
-    if (ma !== c.ma) canhBao.push({ loai: 'doiCG', ma, text: `${c.ma} → ${ma} (theo phường ${dich?.phuong || ''})` });
-    moi.set(ma, r3((moi.get(ma) || 0) + (+c.kl || 0) * r));
+    if (ma !== c.ma) bao('doiCG', `${c.ma} → ${ma} (theo phường ${dich?.phuong || ''})`, ma);
+    else if (laCanGio(dich?.phuong) && !laMaCG(ma) && !catalog[ma + '_cg'] && !catalog[ma + '_CG']) bao('thieuCG', `Không có mã Cần Giờ cho ${ma} — giữ mã thường`, ma);
+    const d = catalog[ma]?.dvt;
+    let kl = +c.kl || 0;
+    if (laThang(d)) { if (kl !== thang) bao('thang', `${ma} theo tháng: ${thang} tháng còn lại năm ${plD?.namKH || now.getFullYear()}`, ma); kl = thang; }
+    else if (r !== 1 && dvtV && dvtChuan(d) === dvtV) { kl = r3(kl * r); nhan++; }
+    moi.set(ma, r3((moi.get(ma) || 0) + kl));
   }
+  if (nhan) bao('tiLe', `${nhan} mã cùng ĐVT với KL vị trí được nhân ×${r3(r)} (${r3(+dich.kl)}/${r3(+nguon.kl)}); mã đếm khác giữ nguyên số`);
+  else if (r !== 1) bao('tiLe', `KL vị trí khác nguồn (${r3(+dich.kl)} / ${r3(+nguon.kl)}) — các mã giữ nguyên số, kiểm lại`);
   const cu = new Map((dich?.chiTiet || []).map((c) => [c.ma, +c.kl || 0]));
+  const daTH = new Set(Object.entries(dich?.thucHien || {}).filter(([, k]) => +k).map(([m]) => m));
   const them = [...moi.keys()].filter((m) => !cu.has(m));
   const chiDich = [...cu.keys()].filter((m) => !moi.has(m));
   const doiKL = [...moi].filter(([m, k]) => cu.has(m) && r3(cu.get(m)) !== k).map(([ma, sang]) => ({ ma, tu: cu.get(ma), sang }));
-  // Gộp: giữ nguyên mọi mã + KL của đích, chỉ thêm mã đích chưa có
-  const kq = cheDo === 'gop' ? new Map([...cu, ...[...moi].filter(([m]) => !cu.has(m))]) : new Map(moi);
-  for (const m of kq.keys()) {
-    if (!catalog[m]) canhBao.push({ loai: 'khongDM', ma: m, text: `${m} không có trong danh mục HĐ` });
-    else if (!coTrongGoi(catalog, m, dich?.goi)) canhBao.push({ loai: 'ngoaiGoi', ma: m, text: `${m} không có KL trong HĐ gói của vị trí đích` });
+  let kq, bo = [], giu = [];
+  if (cheDo === 'gop') { kq = new Map([...cu, ...[...moi].filter(([m]) => !cu.has(m))]); giu = chiDich; }
+  else {
+    kq = new Map(moi);
+    // Không bỏ mã đã có KL thực hiện (mất kế hoạch đi kèm)
+    for (const m of chiDich) if (daTH.has(m)) { kq.set(m, cu.get(m)); giu.push(m); bao('giuTH', `${m} đã có KL thực hiện — giữ lại`, m); } else bo.push(m);
   }
+  for (const m of kq.keys()) {
+    if (!catalog[m]) bao('khongDM', `${m} không có trong danh mục HĐ`, m);
+    else if (!coTrongGoi(catalog, m, dich?.goi)) bao('ngoaiGoi', `${m} không có KL trong HĐ gói của vị trí đích`, m);
+  }
+  // Cặp Thay thế ↔ Lắp đặt cùng có mặt sau khi chép → dễ tính trùng
+  const cap = capDiKem([...kq.keys()].map((m) => m.replace(/_cg$/i, '')), catalog);
+  const daBao = new Set();
+  for (const [a, b2] of cap) if (kq.has(a) && kq.has(b2) && !daBao.has(b2) && loaiTen(catalog[a]?.ten) === 'thay') { daBao.add(a); bao('trungCap', `${a} (thay thế) và ${b2} (lắp đặt) là 2 cách tính thay nhau — kiểm lại`, a); }
+  const doiKLmo = cheDo === 'gop' ? [] : doiKL;
   return {
     chiTiet: [...kq].map(([ma, kl]) => ({ ma, kl })),
-    khac: { them, bo: cheDo === 'gop' ? [] : chiDich, giu: cheDo === 'gop' ? chiDich : [], doiKL: cheDo === 'gop' ? [] : doiKL },
-    canhBao, chan, giongHet: !them.length && (cheDo === 'gop' || (!chiDich.length && !doiKL.length)),
+    khac: { them, bo, giu, doiKL: doiKLmo },
+    canhBao, chan, giongHet: !them.length && !bo.length && (cheDo === 'gop' || !doiKLmo.length),
   };
+}
+
+/**
+ * Tác động lên HĐ khi chép: tổng KL thay đổi theo (gói, năm KH, mã) so với "HĐ còn lại chưa vào KH".
+ * @param ap [{ d: vị trí đích, chiTiet: bộ mới }]
+ * @returns [{ goi, nam, ma, them, conLai, vuot }] — chỉ mã có thay đổi, vượt lên trước
+ */
+export function tacDongHD(st, ap, doiChieu) {
+  const plMap = new Map((st.phuLuc || []).map((p) => [p.id, p]));
+  const tong = new Map();
+  for (const { d, chiTiet } of ap) {
+    const pl = plMap.get(d.plId);
+    if (!d.goi || d.goi === 'nhieu' || pl?.nhap) continue;   // phụ lục nháp không vào "Đã vào KH"
+    const cu = new Map((d.chiTiet || []).map((c) => [c.ma, +c.kl || 0]));
+    const ma = new Set([...cu.keys(), ...chiTiet.map((c) => c.ma)]);
+    const moiM = new Map(chiTiet.map((c) => [c.ma, +c.kl || 0]));
+    for (const m of ma) {
+      const dt = (moiM.get(m) || 0) - (cu.get(m) || 0); if (!dt) continue;
+      const k = `${d.goi}|${+pl?.namKH}|${m}`; tong.set(k, (tong.get(k) || 0) + dt);
+    }
+  }
+  const dc = new Map();
+  const out = [];
+  for (const [k, them] of tong) {
+    const [goi, nam, ma] = k.split('|');
+    if (!dc.has(goi + nam)) dc.set(goi + nam, new Map((doiChieu ? doiChieu(st, goi, +nam).rows : []).map((x) => [x.ma, x])));
+    const row = dc.get(goi + nam).get(ma);
+    const hd = row ? row.hd : (st.catalog?.[ma]?.goi?.[goi]?.kl?.[nam] ?? 0);
+    const conLai = r3(row ? row.hdConLai : hd);
+    out.push({ goi, nam: +nam, ma, them: r3(them), conLai, vuot: them > 0 && them - conLai > 1e-9 });
+  }
+  return out.sort((a, b) => b.vuot - a.vuot || soSanhMa(a.ma, b.ma));
 }
 
 /**

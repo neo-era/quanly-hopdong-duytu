@@ -120,3 +120,68 @@ export function nhuViTriTruoc(mau, dich) {
   const r = +mau.kl > 0 && +dich?.kl > 0 ? +dich.kl / +mau.kl : 1;
   return mau.chiTiet.map((c) => ({ ma: c.ma, kl: Math.round((+c.kl || 0) * r * 1000) / 1000 }));
 }
+
+// ---- Chép nguyên bộ HM từ 1 vị trí hoàn chỉnh sang các vị trí cùng loại (docs/07_ChepBoHM.md) ----
+const coTrongGoi = (catalog, ma, goi) => !goi || goi === 'nhieu' || !!Object.keys(catalog?.[ma]?.goi?.[goi]?.kl || {}).length;
+/** Đổi mã cho hợp phường đích: Cần Giờ → mã _cg nếu có; ngoài Cần Giờ → mã thường nếu có. */
+function maTheoPhuong(ma, phuong, catalog) {
+  const goc = String(ma).replace(/_cg$/i, '');
+  if (laCanGio(phuong)) return catalog?.[goc + '_cg'] ? goc + '_cg' : catalog?.[goc + '_CG'] ? goc + '_CG' : ma;
+  return laMaCG(ma) && catalog?.[goc] ? goc : ma;
+}
+const r3 = (x) => Math.round(x * 1000) / 1000;
+
+/**
+ * Bộ HM chép sang 1 vị trí đích + so sánh với bộ HM đích đang có.
+ * KL nhân theo tỉ lệ KL vị trí (đích/nguồn; thiếu KL → giữ nguyên). Mã đổi theo phường (Cần Giờ).
+ * @param opts.cheDo 'thay' (bộ đích = bộ nguồn) | 'gop' (giữ nguyên mã + KL của đích, chỉ thêm mã đích chưa có)
+ * @returns { chiTiet, khac: { them, bo, doiKL:[{ma,tu,sang}] }, canhBao:[{loai, ma?, text}], chan: lý do không nên chép | '' , giongHet }
+ */
+export function chepBoHM(st, nguon, dich, { cheDo = 'thay' } = {}) {
+  const catalog = st.catalog || {};
+  const plMap = new Map((st.phuLuc || []).map((p) => [p.id, p]));
+  const canhBao = [];
+  let chan = '';
+  const lN = loaiNhom(nguon, plMap.get(nguon?.plId)), lD = loaiNhom(dich, plMap.get(dich?.plId));
+  if (lN !== lD) { chan = 'khacLoai'; canhBao.push({ loai: 'khacLoai', text: 'Khác loại công tác với vị trí nguồn' }); }
+  if (dich?.trangThai === 'da') { chan = chan || 'daTH'; canhBao.push({ loai: 'daTH', text: 'Đã thực hiện — chép sẽ đổi KL kế hoạch' }); }
+  const r = +nguon?.kl > 0 && +dich?.kl > 0 ? +dich.kl / +nguon.kl : 1;
+  if (r !== 1) canhBao.push({ loai: 'tiLe', text: `KL nhân ×${r3(r)} theo KL vị trí (${r3(+dich.kl)}/${r3(+nguon.kl)})` });
+  const moi = new Map();
+  for (const c of nguon?.chiTiet || []) {
+    const ma = maTheoPhuong(c.ma, dich?.phuong, catalog);
+    if (ma !== c.ma) canhBao.push({ loai: 'doiCG', ma, text: `${c.ma} → ${ma} (theo phường ${dich?.phuong || ''})` });
+    moi.set(ma, r3((moi.get(ma) || 0) + (+c.kl || 0) * r));
+  }
+  const cu = new Map((dich?.chiTiet || []).map((c) => [c.ma, +c.kl || 0]));
+  const them = [...moi.keys()].filter((m) => !cu.has(m));
+  const chiDich = [...cu.keys()].filter((m) => !moi.has(m));
+  const doiKL = [...moi].filter(([m, k]) => cu.has(m) && r3(cu.get(m)) !== k).map(([ma, sang]) => ({ ma, tu: cu.get(ma), sang }));
+  // Gộp: giữ nguyên mọi mã + KL của đích, chỉ thêm mã đích chưa có
+  const kq = cheDo === 'gop' ? new Map([...cu, ...[...moi].filter(([m]) => !cu.has(m))]) : new Map(moi);
+  for (const m of kq.keys()) {
+    if (!catalog[m]) canhBao.push({ loai: 'khongDM', ma: m, text: `${m} không có trong danh mục HĐ` });
+    else if (!coTrongGoi(catalog, m, dich?.goi)) canhBao.push({ loai: 'ngoaiGoi', ma: m, text: `${m} không có KL trong HĐ gói của vị trí đích` });
+  }
+  return {
+    chiTiet: [...kq].map(([ma, kl]) => ({ ma, kl })),
+    khac: { them, bo: cheDo === 'gop' ? [] : chiDich, giu: cheDo === 'gop' ? chiDich : [], doiKL: cheDo === 'gop' ? [] : doiKL },
+    canhBao, chan, giongHet: !them.length && (cheDo === 'gop' || (!chiDich.length && !doiKL.length)),
+  };
+}
+
+/**
+ * Vị trí nguồn gợi ý cho 1 nhóm vị trí đích: có chi tiết HM, cùng loại; ưu tiên cùng gói, cùng phường, nhiều mã, đã sửa tay.
+ * @returns [{ v, loai, diem }]
+ */
+export function goiYNguon(st, dichDs, { q = '', toiDa = 30, boQua = null } = {}) {
+  const plMap = new Map((st.phuLuc || []).map((p) => [p.id, p]));
+  const loaiD = new Set(dichDs.map((v) => loaiNhom(v, plMap.get(v.plId))));
+  const idD = new Set(boQua ?? dichDs.map((v) => v.id));   // mặc định không gợi ý chính các vị trí đích
+  const goiD = new Set(dichDs.map((v) => v.goi)), phD = new Set(dichDs.map((v) => fold(v.phuong)));
+  const tu = fold(q).split(/\s+/).filter(Boolean);
+  return (st.viTri || []).filter((v) => !idD.has(v.id) && (v.chiTiet || []).length && loaiD.has(loaiNhom(v, plMap.get(v.plId))))
+    .filter((v) => !tu.length || tu.every((t) => fold(`${v.tram} ${v.phuong} ${v.tuyen} ${(v.chiTiet || []).map((c) => c.ma).join(' ')}`).includes(t)))
+    .map((v) => ({ v, loai: loaiNhom(v, plMap.get(v.plId)), diem: (goiD.has(v.goi) ? 4 : 0) + (phD.has(fold(v.phuong)) ? 2 : 0) + (v.chiTietSua ? 1 : 0) + Math.min(v.chiTiet.length, 20) / 20 }))
+    .sort((a, b) => b.diem - a.diem || String(a.v.tram).localeCompare(String(b.v.tram), 'vi')).slice(0, toiDa);
+}

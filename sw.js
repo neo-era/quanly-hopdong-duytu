@@ -1,5 +1,5 @@
 // sw.js — Service worker: cache app shell cho PWA (mở offline được).
-const CACHE = 'hdduytu-v17';
+const CACHE = 'hdduytu-v18';
 const SHELL = [
   './', './index.html', './app.css',
   './js/app.js', './js/ui.js', './js/store.js', './js/drive.js',

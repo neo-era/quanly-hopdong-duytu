@@ -148,6 +148,7 @@ function renderViTri(el) {
         <select class="kl-sel-m" data-fsel="trangThai" aria-label="Trạng thái">${[['', 'Mọi trạng thái'], ['chua', 'Chưa làm'], ['dang', 'Đang làm'], ['da', 'Đã thực hiện'], ['chuaGan', 'Chưa gắn HM']].map(([k, t]) => `<option value="${k}" ${ui.f.trangThai === k ? 'selected' : ''}>${t}</option>`).join('')}</select>
         <select class="kl-sel-m" data-fsel="donVi" aria-label="Đơn vị"><option value="">Mọi đơn vị</option>${[...by('donVi').keys()].sort().map((d) => `<option value="${esc(d)}" ${ui.f.donVi === d ? 'selected' : ''}>${esc(d)}</option>`).join('')}</select>
         <span class="kl-count">${fmt(list.length, 0)} vị trí · ${fmt(tongKL)}</span>
+        ${ui.hoanTacChep && Date.now() - ui.hoanTacChep.luc < 600000 ? `<button class="btn ghost sm lq-44" data-kl="hoanTacChep">↶ Hoàn tác chép bộ HM (${ui.hoanTacChep.ds.length} vị trí)</button>` : ''}
       </div>
       <div class="kl-split">
         <div class="kl-tw"><table class="kl-tb">
@@ -166,6 +167,7 @@ function renderViTri(el) {
           ${selVT.some((v) => v.nguon?.ks) ? `<button class="btn ghost sm" data-kl="ksSo">Xác nhận thuộc Sở</button><button class="btn ghost sm" data-kl="ksGoi">Gán gói</button>` : ''}
           ${selVT.some((v) => v.nguon?.ks && plOf.get(v.plId)?.nhap) ? '<button class="btn ghost sm" data-kl="ksTS">Đặt Trình Sở</button><button class="btn ghost sm" data-kl="ksTT">Đặt KL Trung tâm</button>' : ''}
           ${selVT.some((v) => plOf.get(v.plId)?.nhap) ? '<button class="btn ghost sm" data-kl="ksChuyen">Chuyển nháp → đợt phụ lục</button>' : ''}
+          <button class="btn ghost sm" data-kl="chepBo">⧉ Chép bộ HM từ vị trí…</button>
           <button class="btn ghost sm" data-kl="ganMau">Gắn mẫu HM</button>
           <button class="btn ghost sm" data-kl="boTH">Đặt lại "Chưa làm"</button>
           <button class="btn amber" data-kl="danhDau">✓ Đánh dấu đã thực hiện</button>
@@ -416,6 +418,13 @@ async function onClick(e) {
     case 'danhDau': return danhDau();
     case 'boTH': { const n = ui.sel.size; await api.mutate(() => K.danhDauThucHien(S, [...ui.sel], '', 'chua')); ui.sel.clear(); api.toast(`Đã đặt lại ${n} vị trí về "Chưa làm".`, 'ok'); return rerender(); }
     case 'ganMau': return ganMau();
+    case 'chepBo': return chepBo();
+    case 'hoanTacChep': {
+      const h = ui.hoanTacChep; if (!h) return;
+      const map = new Map(h.ds.map((x) => [x.id, x]));
+      await api.mutate(() => { for (const v of S.viTri) { const o = map.get(v.id); if (o) { v.chiTiet = o.chiTiet; v.chiTietSua = o.chiTietSua; } } });
+      ui.hoanTacChep = null; api.toast(`Đã hoàn tác — trả lại chi tiết HM cho ${map.size} vị trí.`, 'ok'); return rerender();
+    }
     case 'mauPick': {
       const host = document.querySelector('[data-mpicker]'); if (!host) return;
       return hmPicker(host, S, { daCo: new Set((S.mau[ui.mauLoai] || []).map((m) => m.ma).filter(Boolean)),
@@ -882,6 +891,74 @@ async function ganMau() {
   });
   api.toast(`Đã gắn mẫu cho ${n} vị trí${thieu.size ? ` · chưa có mẫu: ${[...thieu].join(', ')}` : ''}.`, thieu.size ? 'err' : 'ok');
   rerender();
+}
+
+// ---- Chép nguyên bộ HM từ 1 vị trí hoàn chỉnh (docs/07_ChepBoHM.md) ----
+function chepBo() {
+  const S = st();
+  if (!ui.sel.size) return api.toast('Chọn các vị trí cần chép trước.', 'err');
+  const chon = S.viTri.filter((v) => ui.sel.has(v.id));
+  // Trong nhóm đã chọn có đúng vị trí đã gắn HM nhiều mã nhất → lấy làm nguồn, còn lại là đích
+  const coHM = chon.filter((v) => (v.chiTiet || []).length).sort((a, b) => b.chiTiet.length - a.chiTiet.length);
+  const s = { nguon: coHM.length && coHM.length < chon.length ? coHM[0].id : '', q: '', cheDo: 'thay', bo: new Set() };
+  const dichDs = () => chon.filter((v) => v.id !== s.nguon);
+  openModal('Chép bộ HM từ vị trí hoàn chỉnh', `<div data-cb></div>`, { wide: true, onMount: (el, close) => {
+    const host = el.querySelector('[data-cb]');
+    const nhan = { khacLoai: 'Khác loại', daTH: 'Đã thực hiện' };
+    const ve = () => {
+      const ds = dichDs();
+      const nguon = S.viTri.find((v) => v.id === s.nguon);
+      const gy = LQ.goiYNguon(S, chon, { q: s.q, boQua: [] });   // vị trí đang chọn đã có HM cũng làm nguồn được
+      if (nguon && !gy.some((x) => x.v.id === nguon.id)) gy.unshift({ v: nguon });
+      const kq = nguon ? ds.map((d) => ({ d, r: LQ.chepBoHM(S, nguon, d, { cheDo: s.cheDo }) })) : [];
+      for (const { d, r } of kq) if ((r.chan || (d.chiTiet || []).length) && !s.bo.has('!' + d.id)) s.bo.add(d.id);   // khác loại / đã TH / đã có HM: mặc định không chép — xem khác biệt rồi tự tick
+      const lam = kq.filter(({ d, r }) => !s.bo.has(d.id) && !r.giongHet);
+      const coCu = ds.some((d) => (d.chiTiet || []).length);
+      const ma = (ds2, cls, dau) => ds2.map((m) => `<span class="kl-chip cb-${cls}">${dau}${esc(typeof m === 'string' ? m : `${m.ma} ${fmt(m.tu)}→${fmt(m.sang)}`)}</span>`).join('');
+      host.innerHTML = `
+        <p class="kl-sub">${fmt(ds.length, 0)} vị trí đích đã chọn. Chép xong vẫn sửa riêng từng vị trí được; có nút Hoàn tác.</p>
+        <h4 class="cb-h">1. Lấy bộ HM của vị trí</h4>
+        <input class="kl-in" type="search" data-cbq placeholder="Tìm trạm, phường, mã HM…" value="${esc(s.q)}" aria-label="Tìm vị trí nguồn">
+        <div class="cb-src" role="radiogroup" aria-label="Vị trí nguồn">${gy.map(({ v }) => `<label class="cb-it ${v.id === s.nguon ? 'on' : ''}"><input type="radio" name="cbn" value="${v.id}" ${v.id === s.nguon ? 'checked' : ''}>
+          <span><b>${esc(v.tram)}</b> <span class="kl-sub">${esc(v.phuong)} · ${esc(goiTen(v.goi))} · ${v.chiTiet.length} mã${ui.sel.has(v.id) ? ' · đang chọn' : ''}</span>
+          <span class="cb-ma">${v.chiTiet.map((c) => `${esc(c.ma)} ×${fmt(c.kl)}`).join(' · ')}</span></span></label>`).join('') || '<div class="empty">Không có vị trí cùng loại đã gắn HM.</div>'}</div>
+        ${nguon ? `${coCu ? `<h4 class="cb-h">2. Vị trí đích đã có HM thì</h4>
+          <div class="cb-seg" role="radiogroup" aria-label="Cách chép"><label class="${s.cheDo === 'thay' ? 'on' : ''}"><input type="radio" name="cbc" value="thay" ${s.cheDo === 'thay' ? 'checked' : ''}> Thay bằng bộ nguồn</label><label class="${s.cheDo === 'gop' ? 'on' : ''}"><input type="radio" name="cbc" value="gop" ${s.cheDo === 'gop' ? 'checked' : ''}> Chỉ thêm mã còn thiếu (giữ nguyên HM đang có)</label></div>` : ''}
+        <h4 class="cb-h">${coCu ? 3 : 2}. Kiểm tra từng vị trí đích</h4>
+        <div class="cb-dich">${kq.map(({ d, r }) => {
+          const on = !s.bo.has(d.id);
+          const tom = r.giongHet ? '<span class="ks-pill dup">Giống hệt — bỏ qua</span>'
+            : !(d.chiTiet || []).length ? `<span class="ks-pill new">Trống · thêm ${r.chiTiet.length} mã</span>`
+            : `<span class="ks-pill chg">Khác ${r.khac.them.length + r.khac.bo.length + r.khac.doiKL.length} mã</span>`;
+          const cb = r.canhBao;
+          return `<div class="cb-row ${on && !r.giongHet ? '' : 'off'}"><label class="cb-top"><input type="checkbox" data-cbd="${d.id}" ${on && !r.giongHet ? 'checked' : ''} ${r.giongHet ? 'disabled' : ''}>
+            <b>${esc(d.tram)}</b> <span class="kl-sub">${esc(d.phuong)} · ${esc(goiTen(d.goi))}</span> ${tom}${r.chan ? ` <span class="ks-pill bad">${nhan[r.chan]}</span>` : ''}</label>
+            ${(d.chiTiet || []).length && !r.giongHet ? `<div class="cb-diff">${ma(r.khac.them, 'add', '+')}${ma(r.khac.bo, 'del', '−')}${ma(r.khac.giu, 'keep', '=')}${ma(r.khac.doiKL, 'chg', '~')}</div>` : ''}
+            ${cb.length ? `<ul class="cb-warn">${cb.map((c) => `<li class="${c.loai}">${esc(c.text)}</li>`).join('')}</ul>` : ''}</div>`;
+        }).join('')}</div>
+        <p class="kl-sub cb-key">+ thêm · − bỏ · = giữ · ~ đổi KL</p>` : '<p class="kl-sub">Chọn 1 vị trí nguồn ở trên.</p>'}
+        <div class="sheet-f"><button class="btn ghost" data-x>Huỷ</button><button class="btn amber" data-cbap ${lam.length ? '' : 'disabled'}>Chép cho ${fmt(lam.length, 0)} vị trí</button></div>`;
+      host.querySelector('[data-x]').onclick = close;
+      const q = host.querySelector('[data-cbq]');
+      let tm = 0; q.oninput = () => { clearTimeout(tm); tm = setTimeout(() => { s.q = q.value; const p = q.selectionStart; ve(); const q2 = host.querySelector('[data-cbq]'); q2.focus(); q2.setSelectionRange(p, p); }, 200); };
+      host.querySelector('[data-cbap]').onclick = async () => {
+        const n = S.viTri.find((v) => v.id === s.nguon);
+        const ap = dichDs().filter((d) => !s.bo.has(d.id)).map((d) => ({ d, r: LQ.chepBoHM(S, n, d, { cheDo: s.cheDo }) })).filter((x) => !x.r.giongHet);
+        if (!ap.length) return;
+        const ht = ap.map(({ d }) => ({ id: d.id, chiTiet: (d.chiTiet || []).map((c) => ({ ...c })), chiTietSua: d.chiTietSua }));
+        await api.mutate(() => { for (const { d, r } of ap) K.suaChiTiet(S, d.id, r.chiTiet); });
+        ui.hoanTacChep = { ds: ht, luc: Date.now() };
+        close(); api.toast(`Đã chép bộ ${n.chiTiet.length} mã của ${n.tram} cho ${ap.length} vị trí — có nút Hoàn tác ở thanh trên.`, 'ok'); rerender();
+      };
+    };
+    host.addEventListener('change', (e) => {
+      const t = e.target;
+      if (t.name === 'cbn') { s.nguon = t.value; s.bo = new Set(); return ve(); }
+      if (t.name === 'cbc') { s.cheDo = t.value; return ve(); }
+      if (t.dataset.cbd) { const id = t.dataset.cbd; if (t.checked) { s.bo.delete(id); s.bo.add('!' + id); } else { s.bo.add(id); s.bo.delete('!' + id); } return ve(); }
+    });
+    ve();
+  } });
 }
 
 // ---- Bộ chọn nhiều mã HM (tìm theo mã / tên, không dấu cũng được) ----

@@ -94,6 +94,40 @@ eq([L.loaiNhom({ nguon: { type: 'vo_tu' } }, { loai: 'PLI' }), L.loaiNhom({}, { 
 eq(L.nhuViTriTruoc({ kl: 1, chiTiet: [{ ma: 'HM127', kl: 1 }, { ma: 'HM123', kl: 3 }] }, { kl: 2 }), [{ ma: 'HM127', kl: 2 }, { ma: 'HM123', kl: 6 }], 'như vị trí trước: nhân theo KL');
 eq(L.nhuViTriTruoc({ kl: null, chiTiet: [{ ma: 'HM127', kl: 1 }] }, { kl: 3 }), [{ ma: 'HM127', kl: 1 }], 'thiếu KL → giữ nguyên');
 
+// ---- Chép nguyên bộ HM (docs/07_ChepBoHM.md C1–C6) ----
+{
+  const st = kho();
+  const mau = { id: 'm', plId: 'p1', tram: 'Bình Trường-1', phuong: 'Bình Trưng', goi: 'G1', kl: 1, chiTiet: [{ ma: 'HM127', kl: 1 }, { ma: 'HM123', kl: 3 }, { ma: 'HM151', kl: 1 }] };
+  const trong = { id: 'd1', plId: 'p1', phuong: 'Bình Trưng', goi: 'G1', kl: 1, chiTiet: [] };
+  const coSan = { id: 'd2', plId: 'p1', phuong: 'Bình Trưng', goi: 'G1', kl: 1, chiTiet: [{ ma: 'HM123', kl: 2 }, { ma: 'HM162', kl: 1 }] };
+  const tru = { id: 'd3', plId: 'p3', phuong: 'Bình Trưng', goi: 'G1', kl: 1, chiTiet: [] };
+  st.viTri.push(mau, trong, coSan, tru);
+  let r = L.chepBoHM(st, mau, trong);
+  eq(r.chiTiet, mau.chiTiet, 'C1 vị trí trống: chép nguyên bộ');
+  eq([r.khac.them.length, r.chan, r.giongHet], [3, '', false], 'C1 vị trí trống: 3 mã thêm, không chặn');
+  r = L.chepBoHM(st, mau, coSan);
+  eq([r.khac.them, r.khac.bo, r.khac.doiKL], [['HM127', 'HM151'], ['HM162'], [{ ma: 'HM123', tu: 2, sang: 3 }]], 'C2 cảnh báo khác nhau: thêm / bỏ / đổi KL');
+  eq(r.chiTiet.map((c) => c.ma), ['HM127', 'HM123', 'HM151'], 'C2 Thay: bộ đích = bộ nguồn');
+  r = L.chepBoHM(st, mau, coSan, { cheDo: 'gop' });
+  eq([r.chiTiet, r.khac.bo, r.khac.giu, r.khac.doiKL], [[{ ma: 'HM123', kl: 2 }, { ma: 'HM162', kl: 1 }, { ma: 'HM127', kl: 1 }, { ma: 'HM151', kl: 1 }], [], ['HM162'], []], 'C2 Gộp: giữ nguyên mã + KL của đích, chỉ thêm mã thiếu');
+  eq(L.chepBoHM(st, mau, { ...coSan, chiTiet: [...mau.chiTiet, { ma: 'HM162', kl: 1 }] }, { cheDo: 'gop' }).giongHet, true, 'C2 Gộp mà đích đã đủ mã nguồn → giống, bỏ qua');
+  eq(L.chepBoHM(st, mau, tru).chan, 'khacLoai', 'C3 khác loại công tác → chặn');
+  eq(L.chepBoHM(st, mau, { ...trong, trangThai: 'da' }).chan, 'daTH', 'C3 đã thực hiện → chặn mặc định');
+  r = L.chepBoHM(st, { ...mau, kl: 2 }, { ...trong, kl: 3 });
+  eq(r.chiTiet.find((c) => c.ma === 'HM123').kl, 4.5, 'C4 nhân KL theo tỉ lệ KL vị trí');
+  r = L.chepBoHM(st, mau, { ...trong, phuong: 'Xã Cần Giờ', goi: 'G2' });
+  ok(r.chiTiet.some((c) => c.ma === 'HM127_cg') && r.canhBao.some((c) => c.loai === 'doiCG'), 'C5 đích ở Cần Giờ → đổi sang mã _cg có trong danh mục');
+  r = L.chepBoHM(st, { ...mau, chiTiet: [{ ma: 'HM428_cg', kl: 1 }] }, trong);
+  eq(r.chiTiet, [{ ma: 'HM428', kl: 1 }], 'C5 nguồn _cg → đích ngoài Cần Giờ dùng mã thường');
+  st.catalog.HM151.goi = { G1: { kl: { 2026: 1 } } };
+  r = L.chepBoHM(st, mau, { ...trong, goi: 'G2' });
+  ok(r.canhBao.some((c) => c.loai === 'ngoaiGoi' && c.ma === 'HM151'), 'C5 mã không có trong HĐ gói đích → cảnh báo');
+  eq(L.chepBoHM(st, mau, { ...trong, chiTiet: mau.chiTiet.map((c) => ({ ...c })) }).giongHet, true, 'C2 giống hệt → báo giống');
+  const g = L.goiYNguon(st, [trong]);
+  eq(g.map((x) => x.v.id), ['m', 'd2'], 'C6 gợi ý nguồn: cùng loại, có HM, nhiều mã lên trước; không gợi ý chính đích / khác loại');
+  eq(L.goiYNguon(st, [trong], { q: 'hm162' }).map((x) => x.v.id), ['d2'], 'C6 tìm nguồn theo mã HM');
+}
+
 // Danh mục thật (nếu có)
 const CAT = process.env.KL_CAT;
 if (CAT && fs.existsSync(CAT)) {

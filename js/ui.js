@@ -48,7 +48,7 @@ function renderHeader() {
     ? `<button class="btn ${st.dirty ? 'amber' : 'ghost'}" id="btnSave" ${st.dirty ? '' : 'disabled'}>
          ${st.dirty ? '● Lưu lên Drive' : 'Đã lưu'}</button>`
     : '';
-  const src = { drive: 'Drive', cache: 'Bộ nhớ máy (offline)', seed: 'Dữ liệu khởi tạo (04 HĐ thật)' }[st.loadedFrom] || '—';
+  const src = { drive: 'Drive', cache: 'Bộ nhớ máy (offline)', seed: 'Dữ liệu khởi tạo', empty: 'Chưa tải — đăng nhập Drive' }[st.loadedFrom] || '—';
   document.getElementById('hdr-right').innerHTML = `
     <div class="src">Nguồn: <b>${src}</b>${st.dirty ? ' · <span class="dot-warn">chưa lưu</span>' : ''}</div>
     ${saveBtn} ${authBtn}
@@ -237,7 +237,8 @@ function renderTools() {
       <div class="dcard pad"><h3>Sao lưu / Di chuyển (JSON)</h3><p class="muted">Tải file JSON bản sao, hoặc nạp lại từ file JSON đã lưu.</p>
         <button class="btn ghost" id="btnExpJson">Tải JSON</button>
         <label class="btn ghost filelbl">Nạp JSON<input type="file" id="impJson" accept="application/json,.json" hidden></label></div>
-      <div class="dcard pad"><h3>Khởi tạo 04 HĐ thật</h3><p class="muted">Nạp lại 04 HĐ duy tu 2026–2029 (giá trị HĐ, kế hoạch năm theo bảng giá ký). Thay danh sách HĐ hiện có; giữ nguyên dữ liệu KL vị trí.</p><button class="btn ghost" id="btnSeed">Nạp 04 HĐ thật</button></div>
+      <div class="dcard pad"><h3>Bổ sung HĐ còn thiếu</h3><p class="muted">Chọn file JSON sao lưu: app chỉ thêm HĐ chưa có trong danh sách (khác số HĐ). HĐ đang có và dữ liệu đã nhập không bị thay đổi.</p>
+        <label class="btn ghost filelbl">Chọn file JSON…<input type="file" id="boSungJson" accept="application/json,.json" hidden></label></div>
       <div class="dcard pad"><h3>Đồng bộ Drive</h3><p class="muted">Tải lại bản mới nhất từ Google Drive.</p><button class="btn ghost" id="btnReload" ${D.isSignedIn() ? '' : 'disabled'}>Tải lại từ Drive</button></div>
     </div>`;
 }
@@ -402,10 +403,18 @@ export function bindEvents() {
     });
     if (id === 'btnXlsx') { try { await X.xuatExcel(S.getData(), TODAY()); toast('Đã xuất Excel.', 'ok'); } catch (err) { toast(err.message, 'err'); } }
     if (id === 'btnExpJson') { X.xuatJSON(S.getData()); toast('Đã tải JSON.', 'ok'); }
-    if (id === 'btnSeed') { if (confirm('Nạp lại 04 HĐ thật, thay danh sách HĐ hiện có (giữ KL vị trí)?')) { await S.loadSeed(); toast('Đã nạp 04 HĐ thật.', 'ok'); go('dashboard'); } }
   });
 
   document.body.addEventListener('change', async (e) => {
+    if (e.target.id === 'boSungJson') {
+      try {
+        const obj = await X.nhapJSON(e.target.files[0]);
+        let kq; await S.mutate(d => { kq = C.boSungHD(d.contracts, obj.contracts); });
+        toast(kq.them.length ? `Đã bổ sung ${kq.them.length} HĐ: ${kq.them.join(', ')}${kq.trung ? ` · ${kq.trung} HĐ đã có, giữ nguyên` : ''}. Nhớ Lưu lên Drive.` : `Không có HĐ nào thiếu (${kq.trung} HĐ đã có).`, 'ok');
+        if (kq.them.length) go('dashboard');
+      } catch (err) { toast(err.message, 'err'); }
+      e.target.value = '';
+    }
     if (e.target.id === 'impJson') {
       try { const obj = await X.nhapJSON(e.target.files[0]); await S.mutate(d => { d.contracts = obj.contracts; if (obj.klvt) d.klvt = obj.klvt; }); toast('Đã nạp dữ liệu từ JSON.', 'ok'); go('dashboard'); }
       catch (err) { toast(err.message, 'err'); }
@@ -430,7 +439,7 @@ function openKhoiLuong(hdId) {
 async function doSave() {
   try {
     if (await D.remoteNewerThan(S.getState().baseModifiedTime)) {
-      if (!confirm('Bản trên Drive đã thay đổi (có thể từ máy khác). Vẫn ghi đè bằng bản của bạn?')) return;
+      if (!confirm(S.getState().baseModifiedTime ? 'Bản trên Drive đã thay đổi (có thể từ máy khác). Vẫn ghi đè bằng bản của bạn?' : 'Máy này CHƯA tải dữ liệu từ Drive về. Ghi đè sẽ thay file trên Drive bằng dữ liệu đang có ở máy này (có thể mất dữ liệu). Nên bấm "Tải lại từ Drive" trước. Vẫn ghi đè?')) return;
     }
     const mt = await D.saveData(S.getData());
     S.markSaved(mt);

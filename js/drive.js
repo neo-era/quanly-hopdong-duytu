@@ -163,7 +163,8 @@ export async function saveData(data) {
 /** Kiểm tra bản trên Drive có mới hơn baseModifiedTime không (chống ghi đè). */
 export async function remoteNewerThan(baseModifiedTime) {
   const id = await findFile();
-  if (!id || !baseModifiedTime) return false;
+  if (!id) return false;
+  if (!baseModifiedTime) return true;   // máy này chưa tải bản trên Drive về → coi như Drive mới hơn (chống ghi đè bằng dữ liệu trống)
   const meta = await (await api(`https://www.googleapis.com/drive/v3/files/${id}?fields=modifiedTime`)).json();
   return new Date(meta.modifiedTime) > new Date(baseModifiedTime);
 }

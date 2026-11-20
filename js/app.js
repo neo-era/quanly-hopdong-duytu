@@ -8,7 +8,7 @@ async function boot() {
 
   // 1) Hiển thị ngay từ cache (nếu có) để mở nhanh/offline
   const hadCache = await S.loadFromCache();
-  if (!hadCache) await S.loadSeed(); // lần đầu: cho xem demo
+  if (!hadCache) await S.loadEmpty(); // lần đầu: trống, đăng nhập Drive để tải dữ liệu thật
   UI.render();
 
   // 2) Nếu đã cấu hình Google thì chuẩn bị đăng nhập (không ép)

@@ -167,3 +167,19 @@ export function dinhDangNgay(iso) {
   const p = (x) => String(x).padStart(2, '0');
   return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`;
 }
+
+/**
+ * Bổ sung HĐ còn thiếu từ 1 bản sao lưu: chỉ thêm HĐ chưa có (khác id và khác số HĐ), KHÔNG sửa / xoá HĐ đang có.
+ * @returns { them: [soHD|id], trung: n }
+ */
+export function boSungHD(hienCo, nguon) {
+  const id = new Set(hienCo.map((c) => c.id)), so = new Set(hienCo.map((c) => String(c.soHD || '').trim()).filter(Boolean));
+  const them = [];
+  let trung = 0;
+  for (const c of nguon || []) {
+    const s = String(c?.soHD || '').trim();
+    if (!c || id.has(c.id) || (s && so.has(s))) { trung++; continue; }
+    hienCo.push(structuredClone(c)); id.add(c.id); if (s) so.add(s); them.push(s || c.id);
+  }
+  return { them, trung };
+}

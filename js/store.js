@@ -1,5 +1,5 @@
 // store.js — Trạng thái trong bộ nhớ + cache offline (IndexedDB) + nháp cục bộ.
-import { SEED, laDemoCu } from '../sample/seed.js';
+import { laDemoCu } from '../sample/seed.js';
 
 const DB_NAME = 'hdduytu';
 const STORE = 'kv';
@@ -47,13 +47,9 @@ function notify() { subs.forEach(fn => fn(state)); }
 export function getState() { return state; }
 export function getData() { return state.data; }
 
-/** Dữ liệu còn là bản demo cũ → thay danh sách HĐ bằng 04 HĐ thật, GIỮ NGUYÊN phần KL vị trí (klvt) và mọi nhánh khác. */
-export function thayDemo(d) {
-  if (!laDemoCu(d)) return false;
-  d.contracts = structuredClone(SEED.contracts);
-  d.version = SEED.version; d.nguonDuLieu = SEED.nguonDuLieu;
-  return true;
-}
+/** Dữ liệu còn là bản demo cũ (số liệu giả) → không tự thay nữa (số liệu thật không còn trong app); chỉ báo. */
+export function thayDemo(d) { return false; }
+export const laBanDemoCu = (d) => laDemoCu(d);
 
 /** Kiểm tra dữ liệu hợp lệ (có mảng contracts). */
 export function hopLe(d) { return !!d && Array.isArray(d.contracts); }
@@ -83,13 +79,11 @@ export async function setFromDrive(data, modifiedTime) {
   notify();
 }
 
-/** Nạp dữ liệu khởi tạo (04 HĐ thật). Giữ các nhánh khác đang có (vd klvt). */
-export async function loadSeed() {
-  const giu = state.data && hopLe(state.data) ? state.data : {};
-  state.data = { ...giu, ...structuredClone(SEED) };
-  state.dirty = true;
-  state.loadedFrom = 'seed';
-  await idbSet('data', { data: state.data, modifiedTime: null });
+/** Lần đầu mở app (chưa có cache, chưa tải Drive): danh sách trống — số liệu thật chỉ tải về sau khi đăng nhập Drive. */
+export async function loadEmpty() {
+  state.data = { version: 2, updatedAt: null, contracts: [] };
+  state.dirty = false;
+  state.loadedFrom = 'empty';
   notify();
 }
 

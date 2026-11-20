@@ -109,5 +109,12 @@ eq(C.dinhDangTien(374_770_000), '374,8 tr', 'định dạng triệu');
 eq(C.dinhDangNgay('2026-12-31'), '31/12/2026', 'định dạng ngày');
 eq(C.dinhDangNgay(''), '—', 'ngày rỗng -> gạch');
 
+// --- Bổ sung HĐ còn thiếu (thay nút "Nạp 04 HĐ thật", 20/11/2026) ---
+{
+  const ds = [{ id: 'hd-g1', soHD: 'A1', giaTri: 1, kyThanhToan: [{ x: 1 }] }];
+  const r = C.boSungHD(ds, [{ id: 'hd-g1', soHD: 'A1', giaTri: 999 }, { id: 'khac', soHD: 'A1' }, { id: 'hd-g2', soHD: 'B2', giaTri: 2 }, null]);
+  eq([r.them, r.trung, ds.length, ds[0].giaTri, ds[0].kyThanhToan.length], [['B2'], 3, 2, 1, 1], 'bổ sung: chỉ thêm HĐ chưa có (trùng id hoặc số HĐ → bỏ qua), không sửa HĐ đang có');
+}
+
 console.log(`\n${fail === 0 ? '✓ TẤT CẢ' : '✗'} ${pass} pass, ${fail} fail`);
 process.exit(fail === 0 ? 0 : 1);

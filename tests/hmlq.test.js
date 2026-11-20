@@ -149,6 +149,28 @@ eq(L.nhuViTriTruoc({ kl: null, chiTiet: [{ ma: 'HM127', kl: 1 }] }, { kl: 3 }), 
   eq(L.goiYNguon(st, [trong], { q: 'hm162' }).map((x) => x.v.id), ['d2'], 'C6 tìm nguồn theo mã HM');
 }
 
+// ---- Đơn giá HĐ theo gói + cảnh báo mẫu ngoài gói (anh chốt 20/11/2026) ----
+{
+  const st = K.emptyState();
+  st.catalog = {
+    HM1: { ten: 'A', dvt: 'cái', dgChuaVat: 999, goi: { G1: { kl: { 2026: 5 }, dgNam: { 2026: 100 }, dg: 100 }, G2: { kl: { 2026: 5 }, dgNam: { 2026: 120, 2027: 125 }, dg: 120 } } },
+    HM2: { ten: 'B', dvt: 'cái', dgChuaVat: 50, goi: { G1: { kl: { 2026: 3 }, dg: 40 } } },
+  };
+  st.bangGia = { G1: { rows: [] }, G2: { rows: [] } };
+  eq([K.dgHD(st, 'HM1', 'G1', 2026).dg, K.dgHD(st, 'HM1', 'G2', 2026).dg, K.dgHD(st, 'HM1', 'G2', 2027).dg], [100, 120, 125], 'D1 cùng mã: mỗi gói lấy đơn giá HĐ gói đó, theo năm');
+  eq(K.dgHD(st, 'HM2', 'G2', 2026), { dg: null, nguon: 'ngoaiGoi' }, 'D2 mã không có trong HĐ gói đã ký → không lấy giá gói khác / giá tham khảo');
+  eq(K.dgHD(st, 'HM2', 'G3', 2026), { dg: 50, nguon: 'thamKhao' }, 'D3 gói chưa nhập bảng giá ký → giá tham khảo, có đánh dấu');
+  eq(K.dgHD(st, 'HMX', 'G1', 2026).nguon, 'khongDM', 'D3 mã ngoài danh mục');
+  eq(K.maNgoaiGoi(st, [{ ma: 'HM1', kl: 1 }, { ma: 'HM2', kl: 1 }], 'G2'), ['HM2'], 'D4 mẫu áp cho vị trí gói 2: HM2 ngoài HĐ gói 2');
+  eq(K.maNgoaiGoi(st, [{ ma: 'HM2', kl: 1 }], 'nhieu'), [], 'D4 vị trí nhiều gói: không báo');
+  st.phuLuc.push({ id: 'p', loai: 'PLI', namKH: 2026, nhom: [] });
+  st.viTri.push({ id: 'a', plId: 'p', goi: 'G1', kl: 1, chiTiet: [{ ma: 'HM1', kl: 2 }] }, { id: 'b', plId: 'p', goi: 'G2', kl: 1, chiTiet: [{ ma: 'HM1', kl: 2 }, { ma: 'HM2', kl: 1 }] });
+  const d1 = K.doiChieu(st, 'G1', 2026), d2 = K.doiChieu(st, 'G2', 2026);
+  eq([d1.tienKH, d2.tienKH], [200, 240], 'D5 tiền KH mỗi gói tính theo đơn giá HĐ gói đó (HM1: G1 100, G2 120)');
+  const r2 = d2.rows.find((x) => x.ma === 'HM2');
+  eq([r2.dg, r2.tienKH, r2.ngoaiGoi, r2.khongCoTrongHD], [0, 0, true, true], 'D5 mã ngoài HĐ gói: không tính tiền, báo Không có trong HĐ gói');
+}
+
 // Danh mục thật (nếu có)
 const CAT = process.env.KL_CAT;
 if (CAT && fs.existsSync(CAT)) {

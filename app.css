@@ -500,3 +500,5 @@ span.ks-gcb{display:inline-block}
 .cb-warn .dangTH,.cb-warn .giuTH{color:var(--red)}
 
 @media (max-height:500px){.cb-src{max-height:none;overflow:visible}}
+.kl-chip.ok{border-color:color-mix(in srgb,var(--grn) 55%,transparent);color:var(--grn)}
+.mau-goi{white-space:normal}.mau-goi .kl-chip{display:inline-block;margin:1px 2px}

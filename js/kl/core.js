@@ -165,12 +165,14 @@ export function doiChieu(st, goi, nam, { phan = 'ld' } = {}) {
     const it = st.catalog[a.ma];
     const g = it?.goi?.[goi];
     const hd = (phan === 'sap' ? g?.klSap?.[nam] ?? g?.kl?.[nam] : g?.kl?.[nam]) ?? 0;
-    const dg = g?.dgNam?.[nam] ?? g?.dg ?? it?.dgChuaVat ?? 0;
+    const gia = dgHD(st, a.ma, goi, nam);
+    const dg = gia.dg ?? 0;
     const kh = round(a.kh), th = round(a.th);
     return {
       ma: a.ma, ten: it?.ten || '', dvt: it?.dvt || '', hd, kh, khTS: round(a.kh - a.khTT), khTT: round(a.khTT), th, nVT: a.nVT,
       khConLai: round(kh - th), hdConLai: round(hd - kh), vuot: kh - hd > 1e-9,
-      khongCoTrongHD: !it, dg, tienKH: kh * dg, tienTH: th * dg, nhom: it?.nhom || '',
+      khongCoTrongHD: !it || gia.nguon === 'ngoaiGoi', ngoaiGoi: gia.nguon === 'ngoaiGoi', dgThamKhao: gia.nguon === 'thamKhao',
+      dg, tienKH: kh * dg, tienTH: th * dg, nhom: it?.nhom || '',
       khDV: dvMap.has(a.ma) ? round(dvMap.get(a.ma).tong) : null, khDVTheo: dvMap.get(a.ma)?.theo || [],
       vuotDV: dvMap.has(a.ma) && dvMap.get(a.ma).tong - hd > 1e-9,
       ntLK: bbnt ? round(ntMap.get(a.ma) || 0) : null,
@@ -313,6 +315,31 @@ export function gopDanhMuc(st, cat) {
   }
   st.catalogNam = [...new Set([...(st.catalogNam || []), ...(cat.nam || [])])].sort();
 }
+
+// ================== Đơn giá HĐ theo gói (anh chốt 20/11/2026: HM của gói nào lấy đơn giá HĐ gói đó) ==================
+/** Mã có KL trong HĐ của gói không (gói chưa rõ / nhiều gói → coi như có). */
+export function coTrongHDGoi(st, ma, goi) {
+  if (!goi || goi === '?' || goi === 'nhieu') return true;
+  const g = st.catalog?.[ma]?.goi?.[goi];
+  return !!g && (Object.values(g.kl || {}).some((x) => +x) || g.dg != null || Object.keys(g.dgNam || {}).length > 0);
+}
+/**
+ * Đơn giá HĐ của 1 mã theo gói + năm: lấy đúng bảng giá gói đó (đơn giá năm → đơn giá gói).
+ * Mã không có trong HĐ gói đã ký → không có đơn giá (không lấy giá gói khác / giá tham khảo).
+ * Gói chưa nhập bảng giá ký → giá tham khảo "Tổng hợp HM" (dgChuaVat), đánh dấu thamKhao.
+ * @returns { dg: number|null, nguon: 'hd' | 'thamKhao' | 'ngoaiGoi' | 'khongDM' }
+ */
+export function dgHD(st, ma, goi, nam) {
+  const it = st.catalog?.[ma];
+  if (!it) return { dg: null, nguon: 'khongDM' };
+  const g = it.goi?.[goi];
+  const dg = g ? (g.dgNam?.[nam] ?? g.dg ?? null) : null;
+  if (dg != null && coTrongHDGoi(st, ma, goi)) return { dg: +dg, nguon: 'hd' };
+  if (goi && goi !== '?' && goi !== 'nhieu' && st.bangGia?.[goi]) return { dg: null, nguon: 'ngoaiGoi' };
+  return it.dgChuaVat != null ? { dg: +it.dgChuaVat, nguon: 'thamKhao' } : { dg: null, nguon: g ? 'hd' : 'ngoaiGoi' };
+}
+/** Mã trong 1 bộ chi tiết không có trong HĐ gói của vị trí. */
+export const maNgoaiGoi = (st, chiTiet, goi) => [...new Set((chiTiet || []).map((c) => c.ma).filter((m) => m && !coTrongHDGoi(st, m, goi)))];
 
 // ================== Mã gói thầu + biểu KL của đơn vị ==================
 /** Mã gói thầu của 1 gói: ưu tiên mã người dùng đã nhập cho bảng giá ký, sau đó mã đã biết (G101TT…). */

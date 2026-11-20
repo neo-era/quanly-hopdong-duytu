@@ -215,7 +215,7 @@ function renderDoiChieu(el) {
     for (const [ma, it] of Object.entries(S.catalog)) {
       const gg = it.goi?.[ui.dc.goi];
       const hd = ui.dc.phan === 'sap' ? gg?.klSap?.[ui.dc.nam] ?? gg?.kl?.[ui.dc.nam] : gg?.kl?.[ui.dc.nam];
-      if (hd && !have.has(ma)) rows = rows.concat([{ ma, ten: it.ten, dvt: it.dvt, hd, kh: 0, th: 0, khConLai: 0, hdConLai: hd, vuot: false, nVT: 0, dg: gg.dgNam?.[ui.dc.nam] ?? gg.dg ?? 0, tienKH: 0 }]);
+      if (hd && !have.has(ma)) rows = rows.concat([{ ma, ten: it.ten, dvt: it.dvt, hd, kh: 0, th: 0, khConLai: 0, hdConLai: hd, vuot: false, nVT: 0, dg: K.dgHD(S, ma, ui.dc.goi, ui.dc.nam).dg ?? 0, tienKH: 0 }]);
     }
   }
   if (ui.dc.nhom) rows = rows.filter((r) => (S.catalog[r.ma]?.nhom || '') === ui.dc.nhom);
@@ -224,7 +224,7 @@ function renderDoiChieu(el) {
   const card = (r) => {
     const mx = Math.max(r.hd, r.kh, 1) * 1.04;
     return `<button class="kl-hmc ${ui.dc.ma === r.ma ? 'on' : ''}" data-ma="${esc(r.ma)}">
-      <div class="h"><b class="n">${esc(r.ma)}${r.nhom ? ` <span class="kl-chip">${esc(r.nhom)}</span>` : ''}</b>${r.vuotDV ? `<span class="pill red mini">KH đơn vị vượt ${fmt(r.khDV - r.hd)}</span>` : ''}${r.khongCoTrongHD ? '<span class="pill red mini">Không có trong HĐ</span>' : r.vuot ? `<span class="pill red mini">Vượt ${fmt(r.kh - r.hd)}</span>` : `<span class="pill grn mini">Còn ${fmt(r.hdConLai)}</span>`}</div>
+      <div class="h"><b class="n">${esc(r.ma)}${r.nhom ? ` <span class="kl-chip">${esc(r.nhom)}</span>` : ''}</b>${r.vuotDV ? `<span class="pill red mini">KH đơn vị vượt ${fmt(r.khDV - r.hd)}</span>` : ''}${r.khongCoTrongHD ? `<span class="pill red mini">${r.ngoaiGoi ? `Không có trong HĐ ${esc(goiTen(ui.dc.goi))}` : 'Không có trong HĐ'}</span>` : r.dgThamKhao ? '<span class="pill mini">Đơn giá tham khảo</span>' : r.vuot ? `<span class="pill red mini">Vượt ${fmt(r.kh - r.hd)}</span>` : `<span class="pill grn mini">Còn ${fmt(r.hdConLai)}</span>`}</div>
       <div class="nm">${esc(r.ten || '—')}${r.dvt ? ' · ' + esc(r.dvt) : ''}</div>
       <div class="kl-stk" aria-hidden="true"><i class="kh" style="width:${(r.kh / mx) * 100}%"></i><i class="th" style="width:${(r.th / mx) * 100}%"></i><i class="mk" style="left:${(r.hd / mx) * 100}%"></i></div>
       <div class="leg"><span>HĐ <b class="n">${fmt(r.hd)}</b></span><span>KH <b class="n">${fmt(r.kh)}</b></span><span>Đã TH <b class="n">${fmt(r.th)}</b></span><span>KH còn <b class="n">${fmt(r.khConLai)}</b></span>${r.khKS ? `<span>Đề xuất KS (nháp) <b class="n">${fmt(r.khKS)}</b></span>` : ''}${r.ntLK !== null && r.ntLK !== undefined ? `<span>NT lũy kế <b class="n">${fmt(r.ntLK)}</b></span>` : ''}${r.khDV !== null && r.khDV !== undefined ? `<span>KH đơn vị <b class="n">${fmt(r.khDV)}</b></span>` : ''}</div></button>`;
@@ -286,17 +286,20 @@ function renderMau(el) {
   const L = ui.mauLoai;
   const rows = S.mau[L] || [];
   const names = Object.entries(S.catalog);
+  const goiKy = Object.keys(S.bangGia || {}).sort();
+  const namMau = Math.max(new Date().getFullYear(), ...(S.catalogNam || []).filter((y) => y <= new Date().getFullYear()));
   el.innerHTML = `<div class="kl-pad">
     <div class="kl-seg">${MAU_PL.map((k) => `<button class="${k === L ? 'on' : ''}" data-mau="${k}">${esc(K.LOAI_TEN[k])}</button>`).join('')}</div>
     <div class="kl-seg ks-seg" aria-label="Mẫu khuôn chung (lấy từ app Khảo sát)">${Object.entries(KS.KS_MAP).filter(([, M]) => /^KS:/.test(M.dich)).map(([k, M]) => `<button class="${'KS:' + k === L ? 'on' : ''}" data-mau="KS:${k}">Khác · ${esc(M.ten)}</button>`).join('')}</div>
-    <p class="muted">1 ${esc(dvtMau(L))} ở ${esc(tenMau(L))} gồm những mã HM nào, mỗi mã bao nhiêu. Khi nhập phụ lục hoặc bấm "Gắn mẫu HM", app điền sẵn chi tiết = KL vị trí × hệ số; vị trí đã sửa tay được giữ nguyên.</p>
+    <p class="muted">1 ${esc(dvtMau(L))} ở ${esc(tenMau(L))} gồm những mã HM nào, mỗi mã bao nhiêu. Khi nhập phụ lục hoặc bấm "Gắn mẫu HM", app điền sẵn chi tiết = KL vị trí × hệ số; vị trí đã sửa tay được giữ nguyên. Mẫu dùng chung cho mọi gói — tiền tính theo đơn giá HĐ của đúng gói từng vị trí; mã ✗ ở gói nào thì vị trí gói đó sẽ bị cảnh báo khi áp mẫu.</p>
     <datalist id="klHM">${names.slice(0, 2500).map(([m, it]) => `<option value="${esc(m)}">${esc(it.ten)}</option>`).join('')}</datalist>
-    <div class="tablewrap"><table class="kl-tb"><thead><tr><th>Mã HM</th><th>Hạng mục (theo bảng giá HĐ)</th><th>ĐVT</th><th class="r">Hệ số / 1 ${esc(dvtMau(L))}</th>${L === 'HANGAM' ? '<th>Tính theo</th>' : ''}<th></th></tr></thead><tbody>
+    <div class="tablewrap"><table class="kl-tb"><thead><tr><th>Mã HM</th><th>Hạng mục (theo bảng giá HĐ)</th><th>ĐVT</th><th class="r">Hệ số / 1 ${esc(dvtMau(L))}</th>${L === 'HANGAM' ? '<th>Tính theo</th>' : ''}<th>Có trong HĐ gói</th><th></th></tr></thead><tbody>
     ${rows.map((m, i) => `<tr><td><input class="kl-in n" list="klHM" value="${esc(m.ma)}" data-mrow="${i}" data-mk="ma" aria-label="Mã HM"></td>
       <td>${esc(S.catalog[m.ma]?.ten || (m.ma ? '⚠ Không có trong danh mục HĐ' : ''))}</td><td>${esc(S.catalog[m.ma]?.dvt || '')}</td>
       <td class="r"><input class="kl-in n r" type="number" step="any" min="0" value="${esc(m.heSo)}" data-mrow="${i}" data-mk="heSo" aria-label="Hệ số"></td>
       ${L === 'HANGAM' ? `<td><select class="kl-in" data-mrow="${i}" data-mk="theo" aria-label="Tính theo"><option value="">× số trụ</option><option value="kl2" ${m.theo === 'kl2' ? 'selected' : ''}>× mét cáp (md)</option></select></td>` : ''}
-      <td><button class="ic del" data-mdel="${i}" aria-label="Xoá dòng">🗑</button></td></tr>`).join('') || '<tr><td colspan="5" class="empty">Chưa có dòng nào.</td></tr>'}
+      <td class="mau-goi">${m.ma && S.catalog[m.ma] ? goiKy.map((g) => K.coTrongHDGoi(S, m.ma, g) ? `<span class="kl-chip ok" title="Có trong HĐ ${esc(goiTen(g))} — đơn giá ${fmt(K.dgHD(S, m.ma, g, namMau).dg ?? 0, 0)} đ">${esc(g.replace(/^G/, 'G'))} ✓</span>` : `<span class="kl-chip bad" title="Không có trong HĐ ${esc(goiTen(g))}">${esc(g)} ✗</span>`).join(' ') : ''}</td>
+      <td><button class="ic del" data-mdel="${i}" aria-label="Xoá dòng">🗑</button></td></tr>`).join('') || '<tr><td colspan="6" class="empty">Chưa có dòng nào.</td></tr>'}
     </tbody></table></div>
     <div data-mpicker></div>
     <div class="kl-row"><button class="btn ghost" data-kl="mauPick">+ Chọn mã HM (chọn nhiều)</button><button class="btn ghost" data-kl="mauThem">+ Dòng trống</button>
@@ -442,8 +445,9 @@ async function onClick(e) {
     case 'mauAp': {
       if (!(S.mau[ui.mauLoai] || []).filter((m) => m.ma).length) return api.toast('Mẫu đang trống — thêm mã HM trước.', 'err');
       const ghiDe = await confirmBox('Áp cả cho các vị trí đã sửa tay chi tiết HM? Chọn "Không" để giữ nguyên các vị trí đã sửa tay.', 'Có, ghi đè', 'Không');
+      const truoc = new Map(S.viTri.map((v) => [v.id, v.chiTiet]));
       let n = 0; await api.mutate(() => (n = ui.mauLoai.startsWith('KS:') ? KS.apMauKS(S, ui.mauLoai.slice(3), ghiDe) : K.apMauChoLoai(S, ui.mauLoai, ghiDe)));
-      api.toast(`Đã gắn mẫu cho ${n} vị trí.`, 'ok'); return rerender();
+      return baoNgoaiGoi(S.viTri.filter((v) => truoc.get(v.id) !== v.chiTiet), `Đã gắn mẫu cho ${n} vị trí`);
     }
     case 'xemVT': {
       const lay = () => K.doiChieu(S, ui.dc.goi, ui.dc.nam, { phan: ui.dc.phan }).rows.find((x) => x.ma === ui.dc.ma);
@@ -817,6 +821,7 @@ async function nhapPhuLuc() {
     onMount: (el, close) => {
       el.querySelector('[data-ap]').onclick = async () => {
         let them = 0, nPL = 0, bo = 0;
+        const plMoi = [];
         await api.mutate(() => {
           items.forEach((it, i) => {
             if (!el.querySelector(`[data-ic="${i}"]`)?.checked) return;
@@ -824,12 +829,13 @@ async function nhapPhuLuc() {
             el.querySelectorAll(`[data-i="${i}"]`).forEach((x) => (o[x.dataset.io] = x.value));
             o.mode = el.querySelector(`input[name="m${i}"]:checked`)?.value;
             const res = K.importPL(S, it.r, o);
-            if (res.boQua) bo++; else { them += res.them; nPL++; }
+            if (res.boQua) bo++; else { them += res.them; nPL++; plMoi.push(res.plId); }
           });
         });
         close();
-        api.toast(`Đã nhập ${nPL} phụ lục · ${fmt(them, 0)} vị trí${bo ? ` · bỏ qua ${bo}` : ''}.`, 'ok');
-        ui.tab = 'vitri'; rerender();
+        ui.tab = 'vitri';
+        const moi = new Set(plMoi);
+        baoNgoaiGoi(S.viTri.filter((v) => moi.has(v.plId) && !v.chiTietSua), `Đã nhập ${nPL} phụ lục · ${fmt(them, 0)} vị trí${bo ? ` · bỏ qua ${bo}` : ''}`);
       };
     },
   });
@@ -897,8 +903,21 @@ async function ganMau() {
       v.chiTiet = v.kl === null || v.kl === undefined ? [] : K.apMau(S.mau[L], v.kl, v.kl2); v.chiTietSua = false; n++;
     }
   });
-  api.toast(`Đã gắn mẫu cho ${n} vị trí${thieu.size ? ` · chưa có mẫu: ${[...thieu].join(', ')}` : ''}.`, thieu.size ? 'err' : 'ok');
+  baoNgoaiGoi(S.viTri.filter((v) => ui.sel.has(v.id)), `Đã gắn mẫu cho ${n} vị trí${thieu.size ? ` · chưa có mẫu: ${[...thieu].join(', ')}` : ''}`, thieu.size > 0);
+}
+/** Sau khi áp mẫu: vị trí nào có mã không nằm trong HĐ gói của nó → báo (mẫu dùng chung mọi gói). */
+function baoNgoaiGoi(vts, loiChao, loi = false) {
+  const S = st();
+  const theoMa = new Map();
+  for (const v of vts) for (const m of K.maNgoaiGoi(S, v.chiTiet, v.goi)) { const o = theoMa.get(m) || new Map(); o.set(v.goi, (o.get(v.goi) || 0) + 1); theoMa.set(m, o); }
+  const nVT = vts.filter((v) => K.maNgoaiGoi(S, v.chiTiet, v.goi).length).length;
+  if (!nVT) { api.toast(loiChao + '.', loi ? 'err' : 'ok'); return rerender(); }
   rerender();
+  const ds = [...theoMa].map(([m, o]) => `<li><b class="n">${esc(m)}</b> ${esc(S.catalog[m]?.ten || '')} — ${[...o].map(([g, k]) => `${esc(goiTen(g))}: ${k} vị trí`).join(' · ')}</li>`).join('');
+  openModal('Có mã không nằm trong HĐ gói', `<p>${esc(loiChao)}. <b>${nVT}</b> vị trí có mã không có trong HĐ của gói vị trí đó — mã này không có đơn giá HĐ gói nên không tính tiền, Đối chiếu HM báo "Không có trong HĐ".</p>
+    <ul class="cb-warn" style="margin-left:0">${ds}</ul>
+    <p class="kl-sub">Sửa: đổi sang mã tương đương có trong HĐ gói (tab Vị trí → chọn vị trí → Sửa chi tiết), hoặc bỏ mã khỏi mẫu nếu không dùng.</p>
+    <div class="sheet-f"><button class="btn amber lq-44" data-x>Đã hiểu</button></div>`, { onMount: (el, close) => { el.querySelector('[data-x]').onclick = close; } });
 }
 
 // ---- Chép nguyên bộ HM từ 1 vị trí hoàn chỉnh (docs/07_ChepBoHM.md) ----

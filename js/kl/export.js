@@ -1,5 +1,5 @@
 // export.js — Xuất bộ phụ lục trình Sở đúng form gốc + TongHop + Đối chiếu HM, công thức sống. Dùng ExcelJS (truyền vào).
-import { doiChieu, kenhPL, ngoaiKHCua, THU_TU_PL } from './core.js';
+import { doiChieu, dgHD, kenhPL, ngoaiKHCua, THU_TU_PL } from './core.js';
 import { colIdx, colLetter } from './parse.js';
 import { tplCua } from './templates2.js';
 import { KS_MAP, tenDich } from './ks.js';
@@ -371,11 +371,12 @@ function writeTongHopTT(wb, st) {
   for (const k of keys) {
     const [goi, nam, ma] = k.split('|');
     const it = st.catalog?.[ma];
-    const g = it?.goi?.[goi];
-    const dg = g?.dgNam?.[nam] ?? g?.dg ?? it?.dgChuaVat ?? null;
-    const kl = Math.round(acc.get(k) * 1e6) / 1e6;
     const ro = goi === '?';
-    ws.getRow(r).values = [ro ? '(chưa rõ gói)' : 'Gói ' + goi.replace(/^G/, ''), +nam, ma, it?.ten || '(không có trong danh mục HĐ)', it?.dvt || '',
+    const gia = ro ? { dg: null, nguon: '' } : dgHD(st, ma, goi, nam);   // đơn giá HĐ đúng gói của vị trí
+    const dg = gia.dg;
+    const kl = Math.round(acc.get(k) * 1e6) / 1e6;
+    const ten = (it?.ten || '(không có trong danh mục HĐ)') + (gia.nguon === 'ngoaiGoi' ? ' — không có trong HĐ gói này' : gia.nguon === 'thamKhao' ? ' — đơn giá tham khảo (gói chưa nhập bảng giá ký)' : '');
+    ws.getRow(r).values = [ro ? '(chưa rõ gói)' : 'Gói ' + goi.replace(/^G/, ''), +nam, ma, ten, it?.dvt || '',
       ro ? kl : { formula: `SUMIFS(${rng('F')},${rng('E')},C${r},${rng('G')},${tieuChi(goi)},${rng('H')},B${r},${rng('L')},"TT")`, result: kl },
       dg, dg ? { formula: `F${r}*G${r}`, result: kl * dg } : null];
     tong += dg ? kl * dg : 0;

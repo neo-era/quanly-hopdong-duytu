@@ -71,18 +71,18 @@ Bước 1 doc (file này) → **Chốt UI** (2 phương án màn "Vị trí" + m
 - Lưu theo gói: KL tổng liên danh, **KL phần Sapulico**, **đơn giá ký HĐ theo năm** (2026 VAT 8%, 2027–2029 VAT 10%). Gói đã có bảng giá ký thì "Tong hop HM" không ghi đè.
 - Kiểm tra khi nhập: thành tiền = KL × ĐG; KL Sapulico + đối tác = tổng; dòng NĂM … = cộng các dòng (phát hiện −217 đ gõ tay ở G2/Cần Giờ/2029).
 - Đối chiếu HM có thêm "Phạm vi: Cả liên danh / Phần Sapulico" (phần Sapulico bỏ các vị trí có đơn vị Lữ Gia / Phú Thọ).
-- Test: 107 (thêm 12 test trên 5 file thật: tổng G1 *** = giá trị HĐ đã ký; G4 Sapulico ***; Thủ Đức khớp 1.942/1.942 dòng).
+- Test: 107 (thêm 12 test trên 5 file thật: tổng G1 = giá trị HĐ đã ký; G4 phần Sapulico khớp; Thủ Đức khớp 1.942/1.942 dòng).
 
 ## Bổ sung 29/10/2026 (2) — Mã gói thầu + Mã hạng mục
 - Khoá chuẩn: Mã gói thầu + Mã HM + Năm. Mã gói thầu theo file Công ty: G101TT (Gói 1), G201NA (Gói 2), G301TB (Gói 3); Gói Thủ Đức chưa có mã — nhập ở thẻ bảng giá ký HĐ (tab Phụ lục đã nhập).
 - Nhóm hạng mục (QLVH / BDTX / DTKTX / TTDK) lấy theo đề mục Gx_11C; Thủ Đức lấy theo cùng mã ở gói khác.
 - Nút "⤓ Biểu KL đơn vị": đọc sheet có tiêu đề "Mã gói thầu | Mã Hạng mục công tác | Năm công tác | Nhóm…"; kiểm tra mã/nhóm/đơn giá/KL HĐ với bảng giá ký; chọn cột làm "KH đơn vị" (mặc định cột "dự kiến"); cùng file có nhiều sheet cùng mã gói → chỉ chọn 1 sheet sạch.
 - Đối chiếu HM: lọc theo nhóm HM, hiện mã gói thầu, cột "KH đơn vị", cảnh báo mã HM có KH đơn vị vượt KL HĐ năm.
-- Kết quả thật: biểu CSKVB (G101TT-2026BSV-CSB_v1) 412 mã khớp bảng giá ký; giá trị dự kiến *** đ; 9 mã vượt KL HĐ Gói 1 năm 2026.
+- Kết quả thật: biểu CSKVB (G101TT-2026BSV-CSB_v1) 412 mã khớp bảng giá ký; giá trị dự kiến khớp dòng NĂM 2026; 9 mã vượt KL HĐ Gói 1 năm 2026.
 
 ## Bổ sung 04/11/2026 — Biên bản nghiệm thu tháng (BBNT)
 - Nút "⤓ Biên bản NT": đọc mọi sheet dạng BBNT (cột Lũy kế kỳ trước / KL tháng N: Thực hiện–Nghiệm thu / Lũy kế đến hết kỳ / Đơn giá); tự nhận gói bằng cách ghép với bảng giá ký HĐ (đúng số dòng + tên); sheet HĐ cũ, sheet căn cứ/mẫu trống tự bỏ.
 - Kiểm tra: tên/KL HĐ/đơn giá so bảng giá ký; lũy kế = kỳ trước + NT; không vượt KL HĐ; nối tiếp tháng trước; cảnh báo thiếu tháng; nhãn cột sai tháng.
 - Ghi giá trị NT tháng (Σ KL NT × ĐG, đúng số dòng NĂM của BBNT) vào kỳ thanh toán của HĐ tương ứng; Đối chiếu HM hiện "NT lũy kế" theo BBNT mới nhất.
-- Kết quả thật: G1 T7–T10 khớp hoàn toàn, lũy kế *** đ; G2 T7, T8, T10 khớp, thiếu BBNT T9.
+- Kết quả thật: G1 T7–T10 khớp hoàn toàn, lũy kế khớp; G2 T7, T8, T10 khớp, thiếu BBNT T9.
 - 04/11 (2): BBNT có cột mã HM → ghép theo mã; thứ tự dòng khác bảng giá → ghép theo tên + ĐVT (G3); chọn cột tên đang in (bỏ cột "theo PLHĐ 008"); nhận biên bản theo đơn vị cùng tháng (G3 T8 Tây + Bắc) → cộng NT, lũy kế = kỳ trước + tổng NT, ghi 1 kỳ vào HĐ.

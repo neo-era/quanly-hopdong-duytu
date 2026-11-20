@@ -28,10 +28,10 @@ Nền: bản 342d62e (dashboard, CRUD, Drive, PWA, xuất Excel, OAuth đã ch�
 
 | Gói | Tổng thành tiền (I4) | Giá gói thầu (J4) | 2026 | 2027 | 2028 | 2029 |
 |---|---|---|---|---|---|---|
-| G1 | *** | *** | 75,79 tỷ | 116,38 tỷ | 123,87 tỷ | 66,32 tỷ |
-| G2 | *** | *** | 99,04 tỷ | 155,77 tỷ | 167,25 tỷ | 89,47 tỷ |
-| G3 | *** | *** | 129,25 tỷ | 176,86 tỷ | 189,73 tỷ | 101,68 tỷ |
-| G4 | *** | *** | 48,37 tỷ | 80,44 tỷ | 85,97 tỷ | 47,98 tỷ |
+| G1 | (số liệu trong file Drive) | | | | | |
+| G2 | (số liệu trong file Drive) | | | | | |
+| G3 | (số liệu trong file Drive) | | | | | |
+| G4 | (số liệu trong file Drive) | | | | | |
 
 - Kết quả: giá trị HĐ + trần (tầng 1) + kế hoạch theo năm (tầng 2) của gói được chọn.
 - Mặc định **giá trị HĐ = tổng thành tiền (I4)** (giá sau giảm giá); giá gói thầu (J4) lưu để tham chiếu. Anh đổi được ở màn xem trước.
